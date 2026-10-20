@@ -85,7 +85,7 @@ volatile int   lastSoilRaw  = 0;
 volatile int   lastSoilPct  = 0;
 
 const unsigned long SENSOR_INTERVAL     = 5000;   // Publicar cada 5s (5000 ms)
-const unsigned long PHOTO_INTERVAL      = 30000;  // Enviar foto a Telegram cada 30 s (30000 ms)
+const unsigned long PHOTO_INTERVAL      = 60000;  // Enviar foto a Telegram cada 60 s (1 min para evitar Rate Limit)
 const unsigned long CAM_UPLOAD_INTERVAL = 10000;  // Refrescar foto en la web cada 10 s (10000 ms)
 const unsigned long MQTT_RETRY_MS       = 5000;
 const uint32_t      MIN_HEAP_TLS        = 50000;  // TLS/HTTPS necesita ~40-50 KB libres
@@ -356,8 +356,8 @@ bool setupCamera() {
 }
 
 bool sendPhotoToTelegram() {
-  if (ESP.getFreeHeap() < MIN_HEAP_TLS) {
-    Serial.printf("⚠️ Heap insuficiente (%u bytes libres). Omitiendo envío...\n", ESP.getFreeHeap());
+  if (ESP.getMaxAllocHeap() < 25000) {
+    Serial.printf("⚠️ Memoria contigua insuficiente para TLS (%u bytes libres). Omitiendo Telegram...\n", ESP.getMaxAllocHeap());
     return false;
   }
 
@@ -367,9 +367,14 @@ bool sendPhotoToTelegram() {
     return false;
   }
 
+  // 1. Subir primero a Lightsail (HTTP directo, rápido y no consume memoria TLS)
+  uploadPhotoToLightsail(fb);
+
+  // 2. Proceder con el envío seguro a Telegram
   WiFiClientSecure netClientSecure;
   netClientSecure.setInsecure();
-  netClientSecure.setTimeout(10000);
+  netClientSecure.setBufferSizes(1024, 512); // Reduce buffer TLS de 32KB a solo 1.5KB
+  netClientSecure.setTimeout(6000);
 
   Serial.println("Conectando a la API de Telegram...");
   if (!netClientSecure.connect("api.telegram.org", 443)) {
@@ -406,27 +411,34 @@ bool sendPhotoToTelegram() {
   }
 
   netClientSecure.print(tail);
+  netClientSecure.flush(); // Enviar de inmediato los últimos bytes pendientes
 
-  // Espera de respuesta
+  // Liberar el Frame Buffer inmediatamente para recuperar memoria
+  esp_camera_fb_return(fb);
+
+  // Espera de respuesta con timeout de 5 segundos
   unsigned long startWait = millis();
-  while (!netClientSecure.available() && netClientSecure.connected() && millis() - startWait < 8000) {
-    delay(10);
+  while (netClientSecure.connected() && !netClientSecure.available() && millis() - startWait < 5000) {
+    delay(40);
+    yield();
   }
 
-  String resp = netClientSecure.readString();
+  String resp = "";
+  while (netClientSecure.available()) {
+    resp += (char)netClientSecure.read();
+  }
   netClientSecure.stop();
-
-  // Subir también a Lightsail para mantener sincronizado el dashboard web
-  uploadPhotoToLightsail(fb);
-
-  esp_camera_fb_return(fb); // Liberación del Frame Buffer
 
   bool ok = resp.indexOf("\"ok\":true") != -1;
   if (ok) {
     Serial.println("📸 Foto enviada con éxito a Telegram");
   } else {
     Serial.println("❌ Error en la respuesta de Telegram:");
-    Serial.println(resp);
+    if (resp.length() > 0) {
+      Serial.println(resp.substring(0, 180));
+    } else {
+      Serial.println("(Sin respuesta o conexión reseteada por Telegram)");
+    }
   }
   return ok;
 }
@@ -539,11 +551,11 @@ void loop() {
   }
 
   if (now - lastTelegramPhoto >= PHOTO_INTERVAL) {
-    lastTelegramPhoto = now;
-    lastCamUpload = now; // Sincronizado para no duplicar captura
     sendPhotoToTelegram();
+    lastTelegramPhoto = millis();
+    lastCamUpload = millis(); // Sincronizado para no duplicar captura
   } else if (now - lastCamUpload >= CAM_UPLOAD_INTERVAL) {
-    lastCamUpload = now;
     captureAndUploadToLightsail();
+    lastCamUpload = millis();
   }
 }
