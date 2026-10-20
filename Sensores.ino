@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <PubSubClient.h>
 #include <WebServer.h>
 #include "esp_camera.h"
@@ -9,6 +10,13 @@
 // Archivo con los pines de la cámara (debe tener descomentado tu CAMERA_MODEL_...)
 #include "board_config.h"
 
+// Credenciales y variables sensibles (ignorado por Git)
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  #include "secrets.example.h"
+#endif
+
 // ==========================================
 // CONFIGURACIÓN DE MÓDULOS OPCIONALES
 // ==========================================
@@ -16,6 +24,9 @@
 #define ENABLE_CAMERA_SERVER false
 // Cambia a 'true' solo si tienes un broker MQTT local (Mosquitto) corriendo en tu red
 #define ENABLE_LOCAL_MQTT    false
+// Envío directo a servidor en la nube Amazon Lightsail
+#define ENABLE_LIGHTSAIL_PUSH true
+const char *LIGHTSAIL_API_URL = SECRET_LIGHTSAIL_API_URL;
 
 #if ENABLE_CAMERA_SERVER
 void startCameraServer();
@@ -24,10 +35,10 @@ void startCameraServer();
 // ==========================================
 // 1. CREDENCIALES
 // ==========================================
-const char *WIFI_SSID = "Mercados";
-const char *WIFI_PASS = "Tafi2015";
+const char *WIFI_SSID = SECRET_WIFI_SSID;
+const char *WIFI_PASS = SECRET_WIFI_PASS;
 
-const char *UBIDOTS_TOKEN = "BBUS-kgMDPOj3RZlaHdBTposS6DUT0NBsWZ";
+const char *UBIDOTS_TOKEN = SECRET_UBIDOTS_TOKEN;
 const char *MQTT_SERVER   = "industrial.api.ubidots.com";
 const int   MQTT_PORT     = 1883;
 const char *DEVICE_LABEL  = "esp32-s3";
@@ -36,8 +47,8 @@ const char *DEVICE_LABEL  = "esp32-s3";
 const char *LOCAL_MQTT_SERVER = "192.168.1.28"; // IP de tu PC donde corre Mosquitto
 const int   LOCAL_MQTT_PORT   = 1883;
 
-const char *TELEGRAM_BOT_TOKEN = "8879202889:AAHFTzLW79oQ3Xwu8jV21QfgLN-9-lEc0kk";
-const char *TELEGRAM_CHAT_ID   = "8023100877";
+const char *TELEGRAM_BOT_TOKEN = SECRET_TELEGRAM_BOT_TOKEN;
+const char *TELEGRAM_CHAT_ID   = SECRET_TELEGRAM_CHAT_ID;
 
 // ==========================================
 // 2. CONFIGURACIÓN DE SENSORES
@@ -239,6 +250,23 @@ void publishSensors() {
     if (localMqttClient.publish("esp32/sensors", payload)) {
       Serial.println(String("📡 Publicado en MQTT local: ") + payload);
     }
+  }
+#endif
+
+  // Publicar directamente en Amazon Lightsail (Push HTTP)
+#if ENABLE_LIGHTSAIL_PUSH
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(LIGHTSAIL_API_URL);
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(3500); // 3.5 segundos máximo de espera
+    int httpResponseCode = http.POST(payload);
+    if (httpResponseCode > 0) {
+      Serial.printf("☁️ Publicado en Lightsail (HTTP %d): %s\n", httpResponseCode, payload);
+    } else {
+      Serial.printf("⚠️ Error al publicar en Lightsail: %s\n", http.errorToString(httpResponseCode).c_str());
+    }
+    http.end();
   }
 #endif
 }

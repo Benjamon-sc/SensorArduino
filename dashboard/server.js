@@ -1,5 +1,7 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const cors = require('cors');
@@ -7,7 +9,8 @@ const cors = require('cors');
 // ==========================================
 // CONFIGURACIÓN
 // ==========================================
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const CLOUD_MODE = process.env.CLOUD_MODE === 'true' || process.env.PUSH_MODE === 'true';
 const rawEsp32Ip = process.env.ESP32_IP || '192.168.1.58';
 const ESP32_IP = rawEsp32Ip.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 const ESP32_PORT = process.env.ESP32_PORT || '80';
@@ -22,6 +25,8 @@ let sensorHistory = [];
 let lastSensorData = null;
 let esp32Online = false;
 let alerts = [];
+let lastUploadedFrame = null;
+let lastUploadedFrameTime = 0;
 
 // Umbrales de alerta (configurables desde el frontend)
 let alertThresholds = {
@@ -84,6 +89,37 @@ app.post('/api/thresholds', (req, res) => {
   res.json(alertThresholds);
 });
 
+// ==========================================
+// ENDPOINTS PUSH (INGESTIÓN DESDE ESP32)
+// ==========================================
+
+// Ingestión de telemetría de sensores por HTTP POST desde el ESP32
+app.post('/api/sensors/data', (req, res) => {
+  const { temperatura, humedad, humedad_suelo } = req.body;
+  if (temperatura !== undefined && humedad !== undefined) {
+    const data = {
+      temperatura: parseFloat(temperatura),
+      humedad: parseFloat(humedad),
+      humedad_suelo: parseFloat(humedad_suelo !== undefined ? humedad_suelo : 0),
+    };
+    processSensorData(data);
+    return res.json({ ok: true, timestamp: Date.now() });
+  }
+  res.status(400).json({ error: 'Faltan parámetros requeridos: temperatura y humedad' });
+});
+
+// Ingestión de captura JPEG desde el ESP32
+app.post('/api/camera/upload', express.raw({ type: ['image/jpeg', 'image/png', 'application/octet-stream'], limit: '10mb' }), (req, res) => {
+  if (req.body && req.body.length > 0) {
+    lastUploadedFrame = req.body;
+    lastUploadedFrameTime = Date.now();
+    esp32Online = true;
+    broadcastWS({ type: 'camera_update', timestamp: lastUploadedFrameTime });
+    return res.json({ ok: true, size: req.body.length, timestamp: lastUploadedFrameTime });
+  }
+  res.status(400).json({ error: 'Buffer de imagen vacío' });
+});
+
 // Stream MJPEG generado de forma no bloqueante a partir de capturas individuales
 app.get('/api/camera/stream', (req, res) => {
   res.writeHead(200, {
@@ -96,6 +132,33 @@ app.get('/api/camera/stream', (req, res) => {
   });
 
   let active = true;
+
+  // Si estamos en modo Cloud o tenemos frames subidos por push
+  if (CLOUD_MODE || (lastUploadedFrame && !rawEsp32Ip.includes('192.168.'))) {
+    const sendPushFrame = () => {
+      if (!active) return;
+      if (lastUploadedFrame) {
+        const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${lastUploadedFrame.length}\r\n\r\n`;
+        try {
+          res.write(header);
+          res.write(lastUploadedFrame);
+          res.write('\r\n');
+        } catch {
+          active = false;
+        }
+      }
+    };
+
+    const timer = setInterval(sendPushFrame, 500);
+    sendPushFrame();
+
+    req.on('close', () => {
+      active = false;
+      clearInterval(timer);
+    });
+    return;
+  }
+
   let fetching = false;
 
   const sendFrame = () => {
@@ -146,8 +209,18 @@ app.get('/api/camera/stream', (req, res) => {
   });
 });
 
-// Proxy de captura de foto
+// Proxy de captura de foto (o último frame subido en modo Push)
 app.get('/api/camera/capture', (req, res) => {
+  if (lastUploadedFrame) {
+    res.writeHead(200, {
+      'Content-Type': 'image/jpeg',
+      'Content-Length': lastUploadedFrame.length,
+      'Cache-Control': 'no-cache',
+      'Access-Control-Allow-Origin': '*',
+    });
+    return res.end(lastUploadedFrame);
+  }
+
   const url = `${ESP32_BASE_URL}/api/capture`;
   http.get(url, (proxyRes) => {
     res.writeHead(proxyRes.statusCode, {
@@ -376,6 +449,10 @@ function pollESP32() {
 }
 
 function startHTTPPolling() {
+  if (CLOUD_MODE) {
+    console.log('☁️  Modo Cloud / Push activado: Polling HTTP local desactivado');
+    return;
+  }
   console.log(`🔄 Iniciando polling HTTP al ESP32 (${ESP32_BASE_URL}) cada 3s como fallback`);
   // Ejecutar inmediatamente al inicio
   pollESP32();
@@ -384,20 +461,47 @@ function startHTTPPolling() {
 }
 
 // ==========================================
+// SERVIR FRONTEND ESTÁTICO (PRODUCCIÓN / NUBE)
+// ==========================================
+const possibleDistPaths = [
+  path.join(__dirname, '../dashboard-app/dist/dashboard-app/browser'),
+  path.join(__dirname, 'public'),
+];
+
+for (const distPath of possibleDistPaths) {
+  if (fs.existsSync(distPath)) {
+    console.log(`📦 Sirviendo frontend compilado desde: ${distPath}`);
+    app.use(express.static(distPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/ws')) {
+        return next();
+      }
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+    break;
+  }
+}
+
+// ==========================================
 // INICIO
 // ==========================================
 server.listen(PORT, () => {
-  console.log(`\n🚀 Dashboard Backend corriendo en http://localhost:${PORT}`);
-  console.log(`   WebSocket:     ws://localhost:${PORT}/ws`);
-  console.log(`   Camera Stream: http://localhost:${PORT}/api/camera/stream`);
-  console.log(`   Camera Snap:   http://localhost:${PORT}/api/camera/capture`);
-  console.log(`   Sensor Data:   http://localhost:${PORT}/api/status`);
-  console.log(`   History:       http://localhost:${PORT}/api/history`);
+  console.log(`\n🚀 Dashboard Backend corriendo en puerto ${PORT}`);
+  console.log(`   Modo:          ${CLOUD_MODE ? 'Cloud / Push Ingest' : 'Local / LAN Proxy'}`);
+  console.log(`   WebSocket:     /ws`);
+  console.log(`   Push Ingest:   POST /api/sensors/data`);
+  console.log(`   Camera Upload: POST /api/camera/upload`);
+  console.log(`   Camera Stream: GET /api/camera/stream`);
+  console.log(`   Camera Snap:   GET /api/camera/capture`);
+  console.log(`   Sensor Data:   GET /api/status`);
+  console.log(`   History:       GET /api/history`);
   console.log(`\n📋 Variables de entorno:`);
+  console.log(`   PORT=${PORT}`);
+  console.log(`   CLOUD_MODE=${CLOUD_MODE}`);
   console.log(`   ESP32 URL=${ESP32_BASE_URL}`);
   console.log(`   MQTT_BROKER=${MQTT_BROKER}\n`);
 });
 
 // Intentar conectar MQTT, si falla usar polling HTTP
 connectMQTT();
-startHTTPPolling(); // Siempre iniciar polling como backup
+startHTTPPolling();

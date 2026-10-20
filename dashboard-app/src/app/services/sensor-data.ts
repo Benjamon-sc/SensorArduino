@@ -10,7 +10,17 @@ import {
 
 @Injectable({ providedIn: 'root' })
 export class SensorDataService {
-  private readonly API_URL = 'http://localhost:3000/api';
+  private getApiUrl(): string {
+    if (typeof window !== 'undefined' && window.location) {
+      if (window.location.port === '4200') {
+        return `http://${window.location.hostname}:3000/api`;
+      }
+      return `${window.location.protocol}//${window.location.host}/api`;
+    }
+    return 'http://localhost:3000/api';
+  }
+
+  private readonly API_URL = this.getApiUrl();
 
   private currentData$ = new BehaviorSubject<SensorData | null>(null);
   private history$ = new BehaviorSubject<SensorData[]>([]);
