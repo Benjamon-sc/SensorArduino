@@ -27,6 +27,9 @@
 // Envío directo a servidor en la nube Amazon Lightsail
 #define ENABLE_LIGHTSAIL_PUSH true
 const char *LIGHTSAIL_API_URL = SECRET_LIGHTSAIL_API_URL;
+const char *LIGHTSAIL_CAM_URL = SECRET_LIGHTSAIL_CAM_URL;
+bool uploadPhotoToLightsail(camera_fb_t *fb);
+void captureAndUploadToLightsail();
 
 #if ENABLE_CAMERA_SERVER
 void startCameraServer();
@@ -81,13 +84,15 @@ volatile float lastHumidity = 0;
 volatile int   lastSoilRaw  = 0;
 volatile int   lastSoilPct  = 0;
 
-const unsigned long SENSOR_INTERVAL = 5000;   // Publicar cada 5s (5000 ms)
-const unsigned long PHOTO_INTERVAL  = 30000;  // Enviar foto a Telegram cada 30 s (30000 ms)
-const unsigned long MQTT_RETRY_MS   = 5000;
-const uint32_t      MIN_HEAP_TLS    = 50000;  // TLS/HTTPS necesita ~40-50 KB libres
+const unsigned long SENSOR_INTERVAL     = 5000;   // Publicar cada 5s (5000 ms)
+const unsigned long PHOTO_INTERVAL      = 30000;  // Enviar foto a Telegram cada 30 s (30000 ms)
+const unsigned long CAM_UPLOAD_INTERVAL = 10000;  // Refrescar foto en la web cada 10 s (10000 ms)
+const unsigned long MQTT_RETRY_MS       = 5000;
+const uint32_t      MIN_HEAP_TLS        = 50000;  // TLS/HTTPS necesita ~40-50 KB libres
 
 unsigned long lastPublishSensors = 0;
 unsigned long lastTelegramPhoto  = 0;
+unsigned long lastCamUpload      = 0;
 unsigned long lastMqttAttempt    = 0;
 unsigned long lastLocalMqttAttempt = 0;
 
@@ -401,7 +406,6 @@ bool sendPhotoToTelegram() {
   }
 
   netClientSecure.print(tail);
-  esp_camera_fb_return(fb); // Liberación del Frame Buffer
 
   // Espera de respuesta
   unsigned long startWait = millis();
@@ -412,6 +416,11 @@ bool sendPhotoToTelegram() {
   String resp = netClientSecure.readString();
   netClientSecure.stop();
 
+  // Subir también a Lightsail para mantener sincronizado el dashboard web
+  uploadPhotoToLightsail(fb);
+
+  esp_camera_fb_return(fb); // Liberación del Frame Buffer
+
   bool ok = resp.indexOf("\"ok\":true") != -1;
   if (ok) {
     Serial.println("📸 Foto enviada con éxito a Telegram");
@@ -420,6 +429,44 @@ bool sendPhotoToTelegram() {
     Serial.println(resp);
   }
   return ok;
+}
+
+// Subir un frame fotográfico en formato JPEG al servidor en la nube Amazon Lightsail
+bool uploadPhotoToLightsail(camera_fb_t *fb) {
+#if ENABLE_LIGHTSAIL_PUSH
+  if (!fb || WiFi.status() != WL_CONNECTED) return false;
+
+  HTTPClient http;
+  http.begin(LIGHTSAIL_CAM_URL);
+  http.addHeader("Content-Type", "image/jpeg");
+  http.setTimeout(4000); // 4 segundos máximo
+
+  int httpResponseCode = http.POST(fb->buf, fb->len);
+  bool ok = (httpResponseCode == 200);
+
+  if (ok) {
+    Serial.printf("📸 Foto subida a Lightsail (%u bytes, HTTP %d)\n", fb->len, httpResponseCode);
+  } else {
+    Serial.printf("⚠️ Error subiendo foto a Lightsail: %s (HTTP %d)\n",
+                  http.errorToString(httpResponseCode).c_str(), httpResponseCode);
+  }
+  http.end();
+  return ok;
+#else
+  return false;
+#endif
+}
+
+// Capturar frame independiente para mantener fresco el streaming web de Lightsail
+void captureAndUploadToLightsail() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("⚠️ Error capturando imagen para Lightsail");
+    return;
+  }
+  uploadPhotoToLightsail(fb);
+  esp_camera_fb_return(fb);
 }
 
 // ==========================================
@@ -493,6 +540,10 @@ void loop() {
 
   if (now - lastTelegramPhoto >= PHOTO_INTERVAL) {
     lastTelegramPhoto = now;
+    lastCamUpload = now; // Sincronizado para no duplicar captura
     sendPhotoToTelegram();
+  } else if (now - lastCamUpload >= CAM_UPLOAD_INTERVAL) {
+    lastCamUpload = now;
+    captureAndUploadToLightsail();
   }
 }
