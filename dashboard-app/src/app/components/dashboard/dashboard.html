@@ -1,0 +1,33 @@
+<div class="dashboard">
+  <header class="dashboard-header">
+    <div class="header-left">
+      <h1>🌱 ESP32 Sensor Dashboard</h1>
+      <span class="status-badge" [class.online]="esp32Online$ | async" [class.offline]="!(esp32Online$ | async)">
+        {{ (esp32Online$ | async) ? '🟢 En línea' : '🔴 Desconectado' }}
+      </span>
+    </div>
+    <button class="settings-btn" (click)="toggleSettings()">
+      ⚙️ Ajustes
+    </button>
+  </header>
+
+  @if (showSettings) {
+    <app-settings-panel (close)="toggleSettings()" />
+  }
+
+  <app-alerts-panel />
+
+  <div class="dashboard-grid">
+    <section class="cards-section">
+      <app-sensor-cards />
+    </section>
+
+    <section class="camera-section">
+      <app-camera-view />
+    </section>
+  </div>
+
+  <section class="charts-section">
+    <app-sensor-charts />
+  </section>
+</div>

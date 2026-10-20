@@ -1,0 +1,39 @@
+<div class="settings-overlay" (click)="onClose()">
+  <div class="settings-panel" (click)="$event.stopPropagation()">
+    <div class="settings-header">
+      <h3>⚙️ Umbrales de Alerta</h3>
+      <button class="close-btn" (click)="onClose()">✕</button>
+    </div>
+
+    <div class="settings-form">
+      <div class="form-group">
+        <label>🌡️ Temperatura máxima (°C)</label>
+        <input type="number" [(ngModel)]="thresholds.temp_max" min="0" max="60" step="1" />
+      </div>
+
+      <div class="form-group">
+        <label>🥶 Temperatura mínima (°C)</label>
+        <input type="number" [(ngModel)]="thresholds.temp_min" min="-10" max="40" step="1" />
+      </div>
+
+      <div class="form-group">
+        <label>💧 Humedad ambiente máxima (%)</label>
+        <input type="number" [(ngModel)]="thresholds.humidity_max" min="0" max="100" step="5" />
+      </div>
+
+      <div class="form-group">
+        <label>🏜️ Humedad ambiente mínima (%)</label>
+        <input type="number" [(ngModel)]="thresholds.humidity_min" min="0" max="100" step="5" />
+      </div>
+
+      <div class="form-group">
+        <label>🌱 Humedad del suelo mínima (%)</label>
+        <input type="number" [(ngModel)]="thresholds.soil_min" min="0" max="100" step="5" />
+      </div>
+
+      <button class="save-btn" (click)="save()">
+        {{ saved ? '✅ Guardado' : '💾 Guardar' }}
+      </button>
+    </div>
+  </div>
+</div>

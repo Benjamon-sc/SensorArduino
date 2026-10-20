@@ -1,0 +1,105 @@
+.camera-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.camera-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text);
+  }
+}
+
+.camera-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cam-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--hover);
+  }
+
+  &.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  &.refresh {
+    padding: 0.35rem 0.5rem;
+  }
+}
+
+.camera-feed {
+  position: relative;
+  background: #000;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 480px;
+  object-fit: contain;
+}
+
+.live-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(220, 38, 38, 0.9);
+  color: white;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  animation: blink 2s infinite;
+}
+
+.camera-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #888;
+  padding: 3rem;
+
+  span {
+    font-size: 3rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
