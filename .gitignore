@@ -1,0 +1,24 @@
+# Credenciales y Secretos de Hardware
+secrets.h
+*.local.*
+.env
+.env.*
+
+# Dependencias Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Compilaciones y builds temporales
+dist/
+build/
+.angular/
+
+# Logs y volcados
+logs/
+*.log
+
+# Archivos del Sistema Operativo
+.DS_Store
+Thumbs.db

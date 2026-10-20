@@ -1,0 +1,17 @@
+{
+  "name": "esp32-dashboard-backend",
+  "version": "1.0.0",
+  "description": "Backend para dashboard ESP32-S3 con sensores y cámara",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "mqtt": "^5.12.1",
+    "ws": "^8.18.2"
+  }
+}

@@ -1,0 +1,44 @@
+<div class="camera-container">
+  <div class="camera-header">
+    <h3>📷 Cámara ESP32</h3>
+    <div class="camera-controls">
+      <button class="cam-btn" [class.active]="isStreaming" (click)="isStreaming = true">
+        🔴 En vivo
+      </button>
+      <button class="cam-btn" [class.active]="!isStreaming" (click)="toggleMode()">
+        📸 Captura
+      </button>
+      @if (!isStreaming) {
+        <button class="cam-btn refresh" (click)="takeSnapshot()">
+          🔄
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="camera-feed">
+    @if (isStreaming) {
+      <img
+        [src]="streamUrl"
+        alt="Transmisión en vivo de la cámara ESP32"
+        class="camera-img"
+        (error)="onImageError()"
+      />
+      <div class="live-badge">🔴 EN VIVO</div>
+    } @else {
+      @if (lastCaptureUrl) {
+        <img
+          [src]="lastCaptureUrl"
+          alt="Captura de la cámara ESP32"
+          class="camera-img"
+          (error)="onImageError()"
+        />
+      } @else {
+        <div class="camera-placeholder">
+          <span>📷</span>
+          <p>Presiona "Captura" para tomar una foto</p>
+        </div>
+      }
+    }
+  </div>
+</div>

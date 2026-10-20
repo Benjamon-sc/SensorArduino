@@ -1,0 +1,26 @@
+@if (activeAlerts$ | async; as alerts) {
+  @if (alerts.length > 0) {
+    <div class="alerts-container">
+      <div class="alerts-header">
+        <h3>⚠️ Alertas ({{ alerts.length }})</h3>
+        <button class="dismiss-all-btn" (click)="dismissAll()">
+          Descartar todas
+        </button>
+      </div>
+      <div class="alerts-list">
+        @for (alert of showAll ? alerts : alerts.slice(0, 3); track alert.id) {
+          <div class="alert-item">
+            <span class="alert-message">{{ alert.message }}</span>
+            <span class="alert-time">{{ alert.timestamp | date:'HH:mm:ss' }}</span>
+            <button class="alert-dismiss" (click)="dismiss(alert.id)">✕</button>
+          </div>
+        }
+        @if (!showAll && alerts.length > 3) {
+          <button class="show-more" (click)="showAll = true">
+            Ver {{ alerts.length - 3 }} alertas más...
+          </button>
+        }
+      </div>
+    </div>
+  }
+}
