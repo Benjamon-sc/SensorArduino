@@ -373,7 +373,6 @@ bool sendPhotoToTelegram() {
   // 2. Proceder con el envío seguro a Telegram
   WiFiClientSecure netClientSecure;
   netClientSecure.setInsecure();
-  netClientSecure.setBufferSizes(1024, 512); // Reduce buffer TLS de 32KB a solo 1.5KB
   netClientSecure.setTimeout(6000);
 
   Serial.println("Conectando a la API de Telegram...");
