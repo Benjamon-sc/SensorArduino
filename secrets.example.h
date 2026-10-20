@@ -18,6 +18,6 @@ const char *SECRET_TELEGRAM_BOT_TOKEN = "TU_TELEGRAM_BOT_TOKEN";
 const char *SECRET_TELEGRAM_CHAT_ID   = "TU_TELEGRAM_CHAT_ID";
 
 // Servidor en la Nube (Amazon Lightsail)
-const char *SECRET_LIGHTSAIL_API_URL  = "http://TU_IP_ESTATICA:3000/api/sensors/data";
+const char *SECRET_LIGHTSAIL_API_URL  = "http://TU_IP_ESTATICA/api/sensors/data";
 
 #endif // SECRETS_EXAMPLE_H
