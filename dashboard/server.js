@@ -27,6 +27,21 @@ let esp32Online = false;
 let alerts = [];
 let lastUploadedFrame = null;
 let lastUploadedFrameTime = 0;
+const activeMjpegClients = new Set();
+
+function broadcastFrameToMjpeg(frame) {
+  if (!frame || activeMjpegClients.size === 0) return;
+  const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`;
+  for (const clientRes of activeMjpegClients) {
+    try {
+      clientRes.write(header);
+      clientRes.write(frame);
+      clientRes.write('\r\n');
+    } catch {
+      activeMjpegClients.delete(clientRes);
+    }
+  }
+}
 
 // Umbrales de alerta (configurables desde el frontend)
 let alertThresholds = {
@@ -115,6 +130,8 @@ app.post('/api/camera/upload', express.raw({ type: ['image/jpeg', 'image/png', '
     lastUploadedFrameTime = Date.now();
     esp32Online = true;
     broadcastWS({ type: 'camera_update', timestamp: lastUploadedFrameTime });
+    broadcastFrameToMjpeg(lastUploadedFrame);
+    console.log(`📸 Nuevo frame de cámara recibido (${req.body.length} bytes)`);
     return res.json({ ok: true, size: req.body.length, timestamp: lastUploadedFrameTime });
   }
   res.status(400).json({ error: 'Buffer de imagen vacío' });
@@ -131,30 +148,40 @@ app.get('/api/camera/stream', (req, res) => {
     'Access-Control-Allow-Origin': '*',
   });
 
-  let active = true;
-
   // Si estamos en modo Cloud o tenemos frames subidos por push
   if (CLOUD_MODE || (lastUploadedFrame && !rawEsp32Ip.includes('192.168.'))) {
-    const sendPushFrame = () => {
-      if (!active) return;
-      if (lastUploadedFrame) {
+    activeMjpegClients.add(res);
+
+    // Enviar inmediatamente la última foto disponible
+    if (lastUploadedFrame) {
+      try {
         const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${lastUploadedFrame.length}\r\n\r\n`;
+        res.write(header);
+        res.write(lastUploadedFrame);
+        res.write('\r\n');
+      } catch {
+        activeMjpegClients.delete(res);
+      }
+    }
+
+    // Keepalive cada 20 segundos para evitar cortes por inactividad
+    const keepaliveTimer = setInterval(() => {
+      if (lastUploadedFrame) {
         try {
+          const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${lastUploadedFrame.length}\r\n\r\n`;
           res.write(header);
           res.write(lastUploadedFrame);
           res.write('\r\n');
         } catch {
-          active = false;
+          activeMjpegClients.delete(res);
+          clearInterval(keepaliveTimer);
         }
       }
-    };
-
-    const timer = setInterval(sendPushFrame, 500);
-    sendPushFrame();
+    }, 20000);
 
     req.on('close', () => {
-      active = false;
-      clearInterval(timer);
+      activeMjpegClients.delete(res);
+      clearInterval(keepaliveTimer);
     });
     return;
   }
@@ -199,6 +226,7 @@ app.get('/api/camera/stream', (req, res) => {
     });
   };
 
+  let active = true;
   // Enviar frame cada 150 ms (~7 FPS fluido sin saturar el microcontrolador)
   const timer = setInterval(sendFrame, 150);
   sendFrame();
@@ -219,6 +247,13 @@ app.get('/api/camera/capture', (req, res) => {
       'Access-Control-Allow-Origin': '*',
     });
     return res.end(lastUploadedFrame);
+  }
+
+  // En modo Cloud, si aún no hay frames, devolver 503 sin bloquear el servidor
+  if (CLOUD_MODE || !rawEsp32Ip || rawEsp32Ip.includes('192.168.')) {
+    return res.status(503).json({
+      error: 'Cámara en espera: el ESP32 aún no ha subido la primera foto a la nube.',
+    });
   }
 
   const url = `${ESP32_BASE_URL}/api/capture`;
