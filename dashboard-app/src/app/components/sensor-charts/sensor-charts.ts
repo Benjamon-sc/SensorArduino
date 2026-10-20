@@ -112,8 +112,8 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           label: 'Temperatura',
           data: [],
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderColor: '#D90429',
+          backgroundColor: 'rgba(217, 4, 41, 0.12)',
           fill: true,
         }],
       },
@@ -127,8 +127,8 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           label: 'Humedad',
           data: [],
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderColor: '#00BFFF',
+          backgroundColor: 'rgba(0, 191, 255, 0.15)',
           fill: true,
         }],
       },
@@ -142,8 +142,8 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         datasets: [{
           label: 'Humedad del Suelo',
           data: [],
-          borderColor: '#22c55e',
-          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          borderColor: '#2B9348',
+          backgroundColor: 'rgba(43, 147, 72, 0.15)',
           fill: true,
         }],
       },

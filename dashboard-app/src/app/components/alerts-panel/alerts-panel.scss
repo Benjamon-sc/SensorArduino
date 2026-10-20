@@ -1,36 +1,44 @@
 .alerts-container {
-  background: var(--warning-bg, #fef3c7);
-  border: 1px solid var(--warning, #f59e0b);
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1.5rem;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: var(--border-glass);
+  border-left: 5px solid #F59E0B;
+  border-radius: var(--border-radius, 12px);
+  padding: 1rem 1.5rem;
+  box-shadow: var(--card-shadow);
 }
 
 .alerts-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
 
   h3 {
     margin: 0;
-    font-size: 1rem;
-    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #92400E;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.7);
   }
 }
 
 .dismiss-all-btn {
-  padding: 0.3rem 0.6rem;
-  border: 1px solid var(--warning);
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #F59E0B;
   border-radius: 6px;
-  background: transparent;
-  color: var(--text);
+  background: rgba(255, 251, 235, 0.8);
+  color: #92400E;
   cursor: pointer;
+  font-family: inherit;
   font-size: 0.8rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
 
   &:hover {
-    background: var(--warning);
-    color: white;
+    background: #F59E0B;
+    color: #FFFFFF;
   }
 }
 
@@ -43,20 +51,23 @@
 .alert-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--surface);
+  gap: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .alert-message {
   flex: 1;
-  color: var(--text);
+  color: #1E293B;
+  font-weight: 600;
 }
 
 .alert-time {
-  color: var(--text-secondary);
+  color: #475569;
   font-size: 0.75rem;
   white-space: nowrap;
 }
@@ -64,27 +75,34 @@
 .alert-dismiss {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: #64748B;
   cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0.2rem;
+  font-size: 0.95rem;
+  padding: 0.25rem;
   line-height: 1;
+  border-radius: 4px;
+  transition: color 0.15s, background-color 0.15s;
 
   &:hover {
     color: var(--danger);
+    background: var(--danger-bg);
   }
 }
 
 .show-more {
   background: none;
   border: none;
-  color: var(--primary);
+  color: var(--btn-primary, #2A6F97);
   cursor: pointer;
+  font-family: inherit;
   font-size: 0.85rem;
-  padding: 0.3rem;
+  font-weight: 700;
+  padding: 0.4rem;
   text-align: center;
+  transition: color 0.15s;
 
   &:hover {
+    color: var(--btn-primary-hover, #014F86);
     text-decoration: underline;
   }
 }
