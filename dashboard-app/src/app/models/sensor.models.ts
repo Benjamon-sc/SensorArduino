@@ -22,8 +22,9 @@ export interface AlertThresholds {
 }
 
 export interface WSMessage {
-  type: 'init' | 'sensor_data' | 'alert' | 'thresholds' | 'status';
-  data: any;
+  type: 'init' | 'sensor_data' | 'alert' | 'thresholds' | 'status' | 'camera_update';
+  data?: any;
+  timestamp?: number;
 }
 
 export interface InitData {

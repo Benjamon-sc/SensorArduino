@@ -20,6 +20,7 @@ build/
 logs/
 *.log
 
-# Archivos del Sistema Operativo
+# Archivos del Sistema Operativo y Editor
 .DS_Store
 Thumbs.db
+.vscode/

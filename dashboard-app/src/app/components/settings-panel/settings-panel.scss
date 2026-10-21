@@ -95,6 +95,17 @@
   }
 }
 
+.error-msg {
+  padding: 0.5rem 0.75rem;
+  background: rgba(217, 4, 41, 0.15);
+  border: 1px solid rgba(217, 4, 41, 0.3);
+  border-radius: var(--border-radius, 8px);
+  color: #d90429;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .save-btn {
   padding: 0.75rem;
   border: 1px solid rgba(255, 255, 255, 0.6);

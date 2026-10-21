@@ -40,10 +40,30 @@ const MAX_STREAM_DURATION_MS = (parseInt(process.env.MAX_STREAM_MINUTES, 10) || 
 let sensorHistory = [];
 let lastSensorData = null;
 let esp32Online = false;
+let lastSeenTimestamp = 0;
 let alerts = [];
 let lastUploadedFrame = null;
 let lastUploadedFrameTime = 0;
 const activeMjpegClients = new Set();
+
+function touchEsp32() {
+  lastSeenTimestamp = Date.now();
+  if (!esp32Online) {
+    esp32Online = true;
+    console.log('📡 ESP32 conectado / detectado en línea');
+    broadcastWS({ type: 'status', data: { esp32_online: true } });
+  }
+}
+
+// Watchdog de inactividad: si el ESP32 no envía datos ni fotos en 25s, marcar OFFLINE
+const ESP32_TIMEOUT_MS = 25000;
+setInterval(() => {
+  if (esp32Online && (Date.now() - lastSeenTimestamp > ESP32_TIMEOUT_MS)) {
+    esp32Online = false;
+    console.log(`⚠️ ESP32 marcado como OFFLINE por inactividad (> ${ESP32_TIMEOUT_MS / 1000}s sin reportar)`);
+    broadcastWS({ type: 'status', data: { esp32_online: false } });
+  }
+}, 5000);
 
 function broadcastFrameToMjpeg(frame) {
   if (!frame || activeMjpegClients.size === 0) return;
@@ -156,7 +176,7 @@ app.post('/api/camera/upload', requireApiKey, express.raw({ type: ['image/jpeg',
   if (req.body && req.body.length > 0) {
     lastUploadedFrame = req.body;
     lastUploadedFrameTime = Date.now();
-    esp32Online = true;
+    touchEsp32();
     broadcastWS({ type: 'camera_update', timestamp: lastUploadedFrameTime });
     broadcastFrameToMjpeg(lastUploadedFrame);
     console.log(`📸 Nuevo frame de cámara recibido (${req.body.length} bytes)`);
@@ -380,7 +400,7 @@ function processSensorData(data) {
 
   lastSensorData = entry;
   sensorHistory.push(entry);
-  esp32Online = true;
+  touchEsp32();
 
   // Limitar historial
   if (sensorHistory.length > HISTORY_MAX) {

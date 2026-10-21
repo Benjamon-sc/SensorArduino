@@ -28,11 +28,7 @@
 #define ENABLE_LIGHTSAIL_PUSH true
 const char *LIGHTSAIL_API_URL = SECRET_LIGHTSAIL_API_URL;
 const char *LIGHTSAIL_CAM_URL = SECRET_LIGHTSAIL_CAM_URL;
-#if defined(SECRET_LIGHTSAIL_API_KEY)
 const char *LIGHTSAIL_API_KEY = SECRET_LIGHTSAIL_API_KEY;
-#else
-const char *LIGHTSAIL_API_KEY = "";
-#endif
 bool uploadPhotoToLightsail(camera_fb_t *fb);
 void captureAndUploadToLightsail();
 
@@ -174,6 +170,7 @@ void handleStream() {
     esp_camera_fb_return(fb);
 
     delay(100); // ~10 FPS
+    if (mqttClient.connected()) mqttClient.loop();
     yield();
   }
 }
@@ -220,7 +217,15 @@ void setupWifi() {
 void readSensors() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  int raw = analogRead(sensorTierraPin);
+
+  // Sobremuestreo de 10 lecturas para filtrar ruido eléctrico del ADC en ESP32
+  long rawSum = 0;
+  const int SAMPLES = 10;
+  for (int i = 0; i < SAMPLES; i++) {
+    rawSum += analogRead(sensorTierraPin);
+    delay(4);
+  }
+  int raw = (int)(rawSum / SAMPLES);
   int soil = constrain(map(raw, valorSeco, valorHumedo, 0, 100), 0, 100);
 
   if (!isnan(t) && !isnan(h)) {
@@ -266,13 +271,15 @@ void publishSensors() {
   // Publicar directamente en Amazon Lightsail (Push HTTP)
 #if ENABLE_LIGHTSAIL_PUSH
   if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
     HTTPClient http;
-    http.begin(LIGHTSAIL_API_URL);
+    http.begin(client, LIGHTSAIL_API_URL);
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("Connection", "close");
     if (strlen(LIGHTSAIL_API_KEY) > 0) {
       http.addHeader("X-API-Key", LIGHTSAIL_API_KEY);
     }
-    http.setTimeout(3500); // 3.5 segundos máximo de espera
+    http.setTimeout(4000); // 4 segundos máximo (evita congelar el loop ante pérdidas de red)
     int httpResponseCode = http.POST(payload);
     if (httpResponseCode > 0) {
       Serial.printf("☁️ Publicado en Lightsail (HTTP %d): %s\n", httpResponseCode, payload);
@@ -280,6 +287,7 @@ void publishSensors() {
       Serial.printf("⚠️ Error al publicar en Lightsail: %s\n", http.errorToString(httpResponseCode).c_str());
     }
     http.end();
+    if (mqttClient.connected()) mqttClient.loop();
   }
 #endif
 }
@@ -340,7 +348,7 @@ bool setupCamera() {
   config.pin_reset    = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.jpeg_quality = 12;
+  config.jpeg_quality = 16; // Optimizado: reduce ~40% el peso de la imagen sin pérdida visible, agilizando la subida
   config.grab_mode    = CAMERA_GRAB_LATEST;
 
   if (psramFound()) {
@@ -364,7 +372,7 @@ bool setupCamera() {
 }
 
 bool sendPhotoToTelegram() {
-  if (ESP.getMaxAllocHeap() < 25000) {
+  if (ESP.getMaxAllocHeap() < 30000) {
     Serial.printf("⚠️ Memoria contigua insuficiente para TLS (%u bytes libres). Omitiendo Telegram...\n", ESP.getMaxAllocHeap());
     return false;
   }
@@ -390,25 +398,35 @@ bool sendPhotoToTelegram() {
     return false;
   }
 
-  const char *boundary = "BoundaryESP32S3";
-  String head = "--" + String(boundary) + "\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n" +
-                String(TELEGRAM_CHAT_ID) +
-                "\r\n--" + String(boundary) + "\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"esp32.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
-  String tail = "\r\n--" + String(boundary) + "--\r\n";
+  // Cabecera multipart construida en stack buffer para evitar fragmentación de memoria (heap)
+  char head[256];
+  int headLen = snprintf(head, sizeof(head),
+    "--BoundaryESP32S3\r\n"
+    "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
+    "%s\r\n"
+    "--BoundaryESP32S3\r\n"
+    "Content-Disposition: form-data; name=\"photo\"; filename=\"esp32.jpg\"\r\n"
+    "Content-Type: image/jpeg\r\n\r\n",
+    TELEGRAM_CHAT_ID);
+
+  const char tail[] = "\r\n--BoundaryESP32S3--\r\n";
+  const size_t tailLen = sizeof(tail) - 1;
 
   size_t imageLen = fb->len;
-  size_t totalLen = head.length() + imageLen + tail.length();
+  size_t totalLen = (size_t)headLen + imageLen + tailLen;
 
-  netClientSecure.println("POST /bot" + String(TELEGRAM_BOT_TOKEN) + "/sendPhoto HTTP/1.1");
+  netClientSecure.print("POST /bot");
+  netClientSecure.print(TELEGRAM_BOT_TOKEN);
+  netClientSecure.println("/sendPhoto HTTP/1.1");
   netClientSecure.println("Host: api.telegram.org");
-  netClientSecure.println("Content-Type: multipart/form-data; boundary=" + String(boundary));
+  netClientSecure.println("Content-Type: multipart/form-data; boundary=BoundaryESP32S3");
   netClientSecure.println("Connection: close");
   netClientSecure.print("Content-Length: ");
   netClientSecure.println(totalLen);
   netClientSecure.println();
-  netClientSecure.print(head);
+  netClientSecure.write((const uint8_t *)head, headLen);
 
-  // Transferencia de datos en bloques
+  // Transferencia de datos de imagen en bloques de 1024 bytes
   uint8_t *fbBuf = fb->buf;
   const size_t bufferSize = 1024;
   for (size_t n = 0; n < imageLen; n += bufferSize) {
@@ -417,36 +435,34 @@ bool sendPhotoToTelegram() {
     yield();
   }
 
-  netClientSecure.print(tail);
+  netClientSecure.write((const uint8_t *)tail, tailLen);
   netClientSecure.flush(); // Enviar de inmediato los últimos bytes pendientes
 
   // Liberar el Frame Buffer inmediatamente para recuperar memoria
   esp_camera_fb_return(fb);
 
-  // Espera de respuesta con timeout de 5 segundos
+  // Espera de respuesta con timeout de 5 segundos sin concatenación de Strings
   unsigned long startWait = millis();
   while (netClientSecure.connected() && !netClientSecure.available() && millis() - startWait < 5000) {
     delay(40);
     yield();
   }
 
-  String resp = "";
-  while (netClientSecure.available()) {
-    resp += (char)netClientSecure.read();
-  }
-  netClientSecure.stop();
-
-  bool ok = resp.indexOf("\"ok\":true") != -1;
+  // Búsqueda directa en el stream: 0 bytes de asignación en Heap (evita fragmentación de RAM)
+  bool ok = netClientSecure.find("\"ok\":true");
   if (ok) {
     Serial.println("📸 Foto enviada con éxito a Telegram");
   } else {
+    char errSnippet[128] = {0};
+    netClientSecure.readBytes(errSnippet, sizeof(errSnippet) - 1);
     Serial.println("❌ Error en la respuesta de Telegram:");
-    if (resp.length() > 0) {
-      Serial.println(resp.substring(0, 180));
+    if (strlen(errSnippet) > 0) {
+      Serial.println(errSnippet);
     } else {
       Serial.println("(Sin respuesta o conexión reseteada por Telegram)");
     }
   }
+  netClientSecure.stop();
   return ok;
 }
 
@@ -455,13 +471,15 @@ bool uploadPhotoToLightsail(camera_fb_t *fb) {
 #if ENABLE_LIGHTSAIL_PUSH
   if (!fb || WiFi.status() != WL_CONNECTED) return false;
 
+  WiFiClient client;
   HTTPClient http;
-  http.begin(LIGHTSAIL_CAM_URL);
+  http.begin(client, LIGHTSAIL_CAM_URL);
   http.addHeader("Content-Type", "image/jpeg");
+  http.addHeader("Connection", "close");
   if (strlen(LIGHTSAIL_API_KEY) > 0) {
     http.addHeader("X-API-Key", LIGHTSAIL_API_KEY);
   }
-  http.setTimeout(4000); // 4 segundos máximo
+  http.setTimeout(7000); // 7 segundos: suficiente para JPEG de ~35KB sin congelar el loop
 
   int httpResponseCode = http.POST(fb->buf, fb->len);
   bool ok = (httpResponseCode == 200);
@@ -473,6 +491,7 @@ bool uploadPhotoToLightsail(camera_fb_t *fb) {
                   http.errorToString(httpResponseCode).c_str(), httpResponseCode);
   }
   http.end();
+  if (mqttClient.connected()) mqttClient.loop();
   return ok;
 #else
   return false;
@@ -530,12 +549,21 @@ void setup() {
 }
 
 void loop() {
+  static unsigned long wifiLostTime = 0;
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("⚠️ Conexión Wi-Fi perdida. Reconectando...");
-    WiFi.reconnect();
-    delay(1000);
+    if (wifiLostTime == 0) {
+      wifiLostTime = millis();
+      Serial.println("⚠️ Conexión Wi-Fi perdida. Intentando reconectar...");
+      WiFi.reconnect();
+    } else if (millis() - wifiLostTime > 60000) {
+      Serial.println("❌ Tiempo máximo sin Wi-Fi (60s) excedido. Reiniciando ESP32...");
+      ESP.restart();
+    } else {
+      delay(1000);
+    }
     return;
   }
+  wifiLostTime = 0; // Restablecer contador al recuperar conexión
 
   httpServer.handleClient();
 
