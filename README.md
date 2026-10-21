@@ -183,3 +183,37 @@ Todos los intervalos están expresados en **milisegundos** (`1000 ms = 1 segundo
   ```bash
   curl http://localhost:3000/api/status
   ```
+
+---
+
+## 🔒 Despliegue Seguro en AWS Lightsail (Protección de Ancho de Banda)
+
+Si despliegas este proyecto en una instancia gratuita de **Amazon Lightsail**, sigue estas medidas para evitar agotamiento de cuota de datos (*Egress*) y cargos imprevistos:
+
+### 1. Variables de Entorno de Seguridad en el Servidor
+En tu instancia Lightsail (o archivo `.env` / servicio `systemd`), define:
+```bash
+PORT=3000
+CLOUD_MODE=true
+API_KEY=tu_clave_secreta_aqui
+MAX_STREAM_CLIENTS=3
+MAX_STREAM_MINUTES=10
+```
+Y en tu `secrets.h` local del microcontrolador ESP32:
+```cpp
+const char *SECRET_LIGHTSAIL_API_KEY = "tu_clave_secreta_aqui";
+```
+
+### 2. Configurar Firewall en la Consola de Lightsail
+En **Networking** de tu instancia en AWS:
+* **Permitir solo:** Puerto `22` (SSH), Puerto `80` (HTTP) y `443` (HTTPS si tienes SSL).
+* **Bloquear:** Asegúrate de que los puertos `3000` (Node.js) y `1883` **NO** estén en la lista del firewall público.
+
+### 3. Activar Alarma de Presupuesto en AWS Billing
+* Ve a **AWS Billing & Cost Management** ➔ **Budgets**.
+* Crea una alerta de presupuesto de **$1.00 USD / mes** con aviso a tu correo electrónico ante cualquier consumo imprevisto de transferencia de red.
+
+### 4. Usar Cloudflare (Plan Gratuito) como Escudo Perimetral
+* Apunta tu dominio a Cloudflare con el **Proxy activo (nube naranja)**.
+* Cloudflare enmascara la IP de Lightsail, absorbe ataques DDoS y almacena en caché el frontend y las fotos, reduciendo drásticamente la salida de datos de AWS.
+

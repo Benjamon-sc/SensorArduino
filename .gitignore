@@ -3,6 +3,7 @@ secrets.h
 *.local.*
 .env
 .env.*
+!.env.example
 
 # Dependencias Node.js
 node_modules/

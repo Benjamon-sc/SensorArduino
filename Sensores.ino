@@ -28,6 +28,11 @@
 #define ENABLE_LIGHTSAIL_PUSH true
 const char *LIGHTSAIL_API_URL = SECRET_LIGHTSAIL_API_URL;
 const char *LIGHTSAIL_CAM_URL = SECRET_LIGHTSAIL_CAM_URL;
+#if defined(SECRET_LIGHTSAIL_API_KEY)
+const char *LIGHTSAIL_API_KEY = SECRET_LIGHTSAIL_API_KEY;
+#else
+const char *LIGHTSAIL_API_KEY = "";
+#endif
 bool uploadPhotoToLightsail(camera_fb_t *fb);
 void captureAndUploadToLightsail();
 
@@ -264,6 +269,9 @@ void publishSensors() {
     HTTPClient http;
     http.begin(LIGHTSAIL_API_URL);
     http.addHeader("Content-Type", "application/json");
+    if (strlen(LIGHTSAIL_API_KEY) > 0) {
+      http.addHeader("X-API-Key", LIGHTSAIL_API_KEY);
+    }
     http.setTimeout(3500); // 3.5 segundos máximo de espera
     int httpResponseCode = http.POST(payload);
     if (httpResponseCode > 0) {
@@ -450,6 +458,9 @@ bool uploadPhotoToLightsail(camera_fb_t *fb) {
   HTTPClient http;
   http.begin(LIGHTSAIL_CAM_URL);
   http.addHeader("Content-Type", "image/jpeg");
+  if (strlen(LIGHTSAIL_API_KEY) > 0) {
+    http.addHeader("X-API-Key", LIGHTSAIL_API_KEY);
+  }
   http.setTimeout(4000); // 4 segundos máximo
 
   int httpResponseCode = http.POST(fb->buf, fb->len);

@@ -6,17 +6,33 @@ const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const cors = require('cors');
 
+// Cargar archivo .env local si existe (para producción en Lightsail)
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf-8');
+  for (const line of envContent.split('\n')) {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = match[2].trim().replace(/^['"](.*)['"]$/, '$1');
+    }
+  }
+}
+
 // ==========================================
 // CONFIGURACIÓN
 // ==========================================
 const PORT = process.env.PORT || 3000;
 const CLOUD_MODE = process.env.CLOUD_MODE === 'true' || process.env.PUSH_MODE === 'true';
+const HOST = process.env.HOST || (CLOUD_MODE ? '127.0.0.1' : '0.0.0.0');
 const rawEsp32Ip = process.env.ESP32_IP || '192.168.1.58';
 const ESP32_IP = rawEsp32Ip.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 const ESP32_PORT = process.env.ESP32_PORT || '80';
 const ESP32_BASE_URL = `http://${ESP32_IP}${ESP32_PORT === '80' ? '' : ':' + ESP32_PORT}`;
 const MQTT_BROKER = process.env.MQTT_BROKER || 'mqtt://localhost:1883';
 const HISTORY_MAX = 500; // Máximo de puntos en el historial
+const API_KEY = process.env.API_KEY || ''; // Clave de seguridad para ingesta y configuración
+const MAX_STREAM_CLIENTS = parseInt(process.env.MAX_STREAM_CLIENTS, 10) || 4; // Máximo de clientes streaming simultáneos
+const MAX_STREAM_DURATION_MS = (parseInt(process.env.MAX_STREAM_MINUTES, 10) || 10) * 60 * 1000; // Duración máx por sesión (10 min)
 
 // ==========================================
 // ESTADO
@@ -61,6 +77,18 @@ app.use(express.json());
 
 const server = http.createServer(app);
 
+// Middleware de autenticación para endpoints protegidos
+function requireApiKey(req, res, next) {
+  if (!API_KEY) {
+    return next(); // Si no está configurada, permitir (compatible en desarrollo local)
+  }
+  const providedKey = req.headers['x-api-key'] || req.query.key || (req.headers.authorization && req.headers.authorization.replace(/^Bearer\s+/i, ''));
+  if (providedKey === API_KEY) {
+    return next();
+  }
+  return res.status(401).json({ error: 'Acceso no autorizado: API Key inválida o ausente' });
+}
+
 // API REST endpoints
 app.get('/api/status', (req, res) => {
   res.json({
@@ -98,7 +126,7 @@ app.get('/api/thresholds', (req, res) => {
   res.json(alertThresholds);
 });
 
-app.post('/api/thresholds', (req, res) => {
+app.post('/api/thresholds', requireApiKey, (req, res) => {
   alertThresholds = { ...alertThresholds, ...req.body };
   broadcastWS({ type: 'thresholds', data: alertThresholds });
   res.json(alertThresholds);
@@ -109,7 +137,7 @@ app.post('/api/thresholds', (req, res) => {
 // ==========================================
 
 // Ingestión de telemetría de sensores por HTTP POST desde el ESP32
-app.post('/api/sensors/data', (req, res) => {
+app.post('/api/sensors/data', requireApiKey, (req, res) => {
   const { temperatura, humedad, humedad_suelo } = req.body;
   if (temperatura !== undefined && humedad !== undefined) {
     const data = {
@@ -123,8 +151,8 @@ app.post('/api/sensors/data', (req, res) => {
   res.status(400).json({ error: 'Faltan parámetros requeridos: temperatura y humedad' });
 });
 
-// Ingestión de captura JPEG desde el ESP32
-app.post('/api/camera/upload', express.raw({ type: ['image/jpeg', 'image/png', 'application/octet-stream'], limit: '10mb' }), (req, res) => {
+// Ingestión de captura JPEG desde el ESP32 (límite reducido a 2 MB por seguridad)
+app.post('/api/camera/upload', requireApiKey, express.raw({ type: ['image/jpeg', 'image/png', 'application/octet-stream'], limit: '2mb' }), (req, res) => {
   if (req.body && req.body.length > 0) {
     lastUploadedFrame = req.body;
     lastUploadedFrameTime = Date.now();
@@ -139,6 +167,13 @@ app.post('/api/camera/upload', express.raw({ type: ['image/jpeg', 'image/png', '
 
 // Stream MJPEG generado de forma no bloqueante a partir de capturas individuales
 app.get('/api/camera/stream', (req, res) => {
+  // Límite estricto de clientes concurrentes para proteger la cuota de transferencia
+  if (activeMjpegClients.size >= MAX_STREAM_CLIENTS) {
+    return res.status(429).json({
+      error: `Límite de streaming alcanzado (${MAX_STREAM_CLIENTS} clientes simultáneos). Cierra otras conexiones para ahorrar ancho de banda.`,
+    });
+  }
+
   res.writeHead(200, {
     'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -148,10 +183,18 @@ app.get('/api/camera/stream', (req, res) => {
     'Access-Control-Allow-Origin': '*',
   });
 
+  activeMjpegClients.add(res);
+
+  // Desconexión automática tras tiempo máximo continuo (evita pestañas olvidadas)
+  const maxDurationTimer = setTimeout(() => {
+    activeMjpegClients.delete(res);
+    try {
+      res.end();
+    } catch {}
+  }, MAX_STREAM_DURATION_MS);
+
   // Si estamos en modo Cloud o tenemos frames subidos por push
   if (CLOUD_MODE || (lastUploadedFrame && !rawEsp32Ip.includes('192.168.'))) {
-    activeMjpegClients.add(res);
-
     // Enviar inmediatamente la última foto disponible
     if (lastUploadedFrame) {
       try {
@@ -180,6 +223,7 @@ app.get('/api/camera/stream', (req, res) => {
     }, 20000);
 
     req.on('close', () => {
+      clearTimeout(maxDurationTimer);
       activeMjpegClients.delete(res);
       clearInterval(keepaliveTimer);
     });
@@ -233,6 +277,8 @@ app.get('/api/camera/stream', (req, res) => {
 
   req.on('close', () => {
     active = false;
+    clearTimeout(maxDurationTimer);
+    activeMjpegClients.delete(res);
     clearInterval(timer);
   });
 });
@@ -520,9 +566,10 @@ for (const distPath of possibleDistPaths) {
 // ==========================================
 // INICIO
 // ==========================================
-server.listen(PORT, () => {
-  console.log(`\n🚀 Dashboard Backend corriendo en puerto ${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`\n🚀 Dashboard Backend corriendo en http://${HOST}:${PORT}`);
   console.log(`   Modo:          ${CLOUD_MODE ? 'Cloud / Push Ingest' : 'Local / LAN Proxy'}`);
+  console.log(`   Host Bind:     ${HOST} ${HOST === '127.0.0.1' ? '(Protegido: Solo accesible vía Nginx)' : '(Abierto a la red)'}`);
   console.log(`   WebSocket:     /ws`);
   console.log(`   Push Ingest:   POST /api/sensors/data`);
   console.log(`   Camera Upload: POST /api/camera/upload`);
@@ -530,11 +577,17 @@ server.listen(PORT, () => {
   console.log(`   Camera Snap:   GET /api/camera/capture`);
   console.log(`   Sensor Data:   GET /api/status`);
   console.log(`   History:       GET /api/history`);
-  console.log(`\n📋 Variables de entorno:`);
+  console.log(`\n📋 Variables y Configuración de Seguridad:`);
   console.log(`   PORT=${PORT}`);
   console.log(`   CLOUD_MODE=${CLOUD_MODE}`);
   console.log(`   ESP32 URL=${ESP32_BASE_URL}`);
-  console.log(`   MQTT_BROKER=${MQTT_BROKER}\n`);
+  console.log(`   MQTT_BROKER=${MQTT_BROKER}`);
+  if (API_KEY) {
+    console.log(`   API_KEY=CONFIGURADA (Endpoints protegidos)`);
+  } else {
+    console.warn(`   ⚠️  API_KEY=NO CONFIGURADA (Endpoints públicos, configurar en entorno para producción)`);
+  }
+  console.log(`   Límite Stream: Máx ${MAX_STREAM_CLIENTS} clientes concurrentes (${MAX_STREAM_DURATION_MS / 60000} min máx)\n`);
 });
 
 // Intentar conectar MQTT, si falla usar polling HTTP
