@@ -31,6 +31,15 @@
         <input type="number" [(ngModel)]="thresholds.soil_min" min="0" max="100" step="5" />
       </div>
 
+      <div class="form-group">
+        <label>🔑 Clave de API (si el backend está protegido)</label>
+        <input type="password" [(ngModel)]="apiKey" placeholder="Opcional en desarrollo local" />
+      </div>
+
+      @if (errorMessage) {
+        <div class="error-msg">{{ errorMessage }}</div>
+      }
+
       <button class="save-btn" (click)="save()">
         {{ saved ? '✅ Guardado' : '💾 Guardar' }}
       </button>

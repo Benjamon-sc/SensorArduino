@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { WebsocketService } from './websocket';
 import {
   SensorData,
@@ -33,6 +33,7 @@ export class SensorDataService {
     soil_min: 20,
   });
   private esp32Online$ = new BehaviorSubject<boolean>(false);
+  private cameraUpdate$ = new Subject<number>();
 
   constructor(private wsService: WebsocketService) {
     this.wsService.connect();
@@ -53,6 +54,9 @@ export class SensorDataService {
           if (history.length > 500) history.splice(0, history.length - 500);
           this.history$.next(history);
           this.esp32Online$.next(true);
+          break;
+        case 'camera_update':
+          this.cameraUpdate$.next(msg.timestamp || Date.now());
           break;
         case 'alert':
           this.alerts$.next([...this.alerts$.value, msg.data]);
@@ -87,24 +91,45 @@ export class SensorDataService {
     return this.esp32Online$.asObservable();
   }
 
+  onCameraUpdate(): Observable<number> {
+    return this.cameraUpdate$.asObservable();
+  }
+
   async dismissAlert(id: string): Promise<void> {
+    const key = typeof localStorage !== 'undefined' ? localStorage.getItem('dashboard_api_key') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (key) headers['X-API-Key'] = key;
+
     await fetch(`${this.API_URL}/alerts/dismiss`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ id }),
-    });
+    }).catch(() => {});
+
     const updated = this.alerts$.value.map((a) =>
       a.id === id || id === 'all' ? { ...a, dismissed: true } : a
     );
     this.alerts$.next(updated);
   }
 
-  async updateThresholds(thresholds: Partial<AlertThresholds>): Promise<void> {
+  async updateThresholds(thresholds: Partial<AlertThresholds>, apiKey?: string): Promise<void> {
+    const key = apiKey ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('dashboard_api_key') : null) ?? '';
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (key) {
+      headers['X-API-Key'] = key;
+    }
+
     const res = await fetch(`${this.API_URL}/thresholds`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(thresholds),
     });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Error ${res.status}: no se pudieron actualizar los umbrales`);
+    }
+
     const data = await res.json();
     this.thresholds$.next(data);
   }

@@ -21,20 +21,34 @@ export class SettingsPanelComponent implements OnInit {
     soil_min: 20,
   };
 
+  apiKey = '';
+  errorMessage = '';
   saved = false;
 
   constructor(private sensorService: SensorDataService) {}
 
   ngOnInit(): void {
+    if (typeof localStorage !== 'undefined') {
+      this.apiKey = localStorage.getItem('dashboard_api_key') || '';
+    }
     this.sensorService.getThresholds().subscribe((t) => {
       this.thresholds = { ...t };
     });
   }
 
   async save(): Promise<void> {
-    await this.sensorService.updateThresholds(this.thresholds);
-    this.saved = true;
-    setTimeout(() => (this.saved = false), 2000);
+    try {
+      this.errorMessage = '';
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('dashboard_api_key', this.apiKey);
+      }
+      await this.sensorService.updateThresholds(this.thresholds, this.apiKey);
+      this.saved = true;
+      setTimeout(() => (this.saved = false), 2000);
+    } catch (err: any) {
+      this.errorMessage = err.message || 'Error al guardar los umbrales';
+      setTimeout(() => (this.errorMessage = ''), 4000);
+    }
   }
 
   onClose(): void {

@@ -2,10 +2,10 @@
   <div class="camera-header">
     <h3>📷 Cámara ESP32</h3>
     <div class="camera-controls">
-      <button class="cam-btn" [class.active]="isStreaming" (click)="isStreaming = true">
+      <button class="cam-btn" [class.active]="isStreaming" (click)="setStreaming(true)">
         🔴 En vivo
       </button>
-      <button class="cam-btn" [class.active]="!isStreaming" (click)="toggleMode()">
+      <button class="cam-btn" [class.active]="!isStreaming" (click)="setStreaming(false)">
         📸 Captura
       </button>
       @if (!isStreaming) {

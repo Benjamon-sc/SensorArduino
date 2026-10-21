@@ -3,6 +3,7 @@ secrets.h
 *.local.*
 .env
 .env.*
+!.env.example
 
 # Dependencias Node.js
 node_modules/
@@ -19,6 +20,7 @@ build/
 logs/
 *.log
 
-# Archivos del Sistema Operativo
+# Archivos del Sistema Operativo y Editor
 .DS_Store
 Thumbs.db
+.vscode/
