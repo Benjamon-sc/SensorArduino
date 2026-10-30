@@ -22,8 +22,8 @@
 // ==========================================
 // Cambia a 'true' solo si no usas WebServer en el puerto 80.
 #define ENABLE_CAMERA_SERVER false
-// Cambia a 'true' solo si tienes un broker MQTT local (Mosquitto) corriendo en tu red
-#define ENABLE_LOCAL_MQTT    false
+// Cambia a 'true' para publicar en el broker MQTT local (EMQX / Mosquitto)
+#define ENABLE_LOCAL_MQTT    true
 // Envío directo a servidor en la nube Amazon Lightsail
 #define ENABLE_LIGHTSAIL_PUSH true
 const char *LIGHTSAIL_API_URL = SECRET_LIGHTSAIL_API_URL;
@@ -48,7 +48,8 @@ const int   MQTT_PORT     = 1883;
 const char *DEVICE_LABEL  = "esp32-s3";
 
 // MQTT local para el dashboard (solo si ENABLE_LOCAL_MQTT es true)
-const char *LOCAL_MQTT_SERVER = "192.168.1.28"; // IP de tu PC donde corre Mosquitto
+// IP de tu PC/servidor donde corre el broker EMQX en puerto 1883
+const char *LOCAL_MQTT_SERVER = "172.16.3.166"; 
 const int   LOCAL_MQTT_PORT   = 1883;
 
 const char *TELEGRAM_BOT_TOKEN = SECRET_TELEGRAM_BOT_TOKEN;

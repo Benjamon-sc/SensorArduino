@@ -1,0 +1,20 @@
+services:
+  emqx:
+    image: docker.io/emqx/emqx:5.8.0
+    container_name: emqx_broker
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # MQTT estándar TCP
+      - "8083:8083"   # MQTT sobre WebSockets (para frontend)
+      - "18083:18083" # Interfaz Web / Dashboard de administración
+    environment:
+      - "EMQX_NODE__NAME=emqx@127.0.0.1"
+      - "EMQX_DASHBOARD__DEFAULT_USERNAME=admin"
+      - "EMQX_DASHBOARD__DEFAULT_PASSWORD=public" # Clave predeterminada inicial
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+
+volumes:
+  emqx_data:
+  emqx_log:

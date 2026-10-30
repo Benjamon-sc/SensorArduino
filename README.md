@@ -4,7 +4,7 @@ Dashboard integral desarrollado con **Angular**, **Node.js** y **ESP32-S3** para
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+##  Arquitectura del Sistema
 
 ```
                   ┌────────────────────────┐
