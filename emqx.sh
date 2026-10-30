@@ -26,10 +26,14 @@ case "$1" in
                 -v emqx_log:/opt/emqx/log:Z \
                 docker.io/emqx/emqx:5.8.0
         fi
+        LAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{print $7}')
         echo "✅ EMQX iniciado con éxito."
         echo "   MQTT Broker:     puerto 1883"
         echo "   WebSockets MQTT: puerto 8083"
-        echo "   Dashboard Web:   http://localhost:18083 (admin / public)"
+        echo "   Dashboard Web:   http://127.0.0.1:18083/ (admin / public)"
+        if [ -n "$LAN_IP" ]; then
+            echo "   Acceso en red:   http://${LAN_IP}:18083/"
+        fi
         ;;
     stop)
         echo "🛑 Deteniendo EMQX..."
@@ -37,6 +41,8 @@ case "$1" in
         ;;
     status)
         $ENGINE ps --filter "name=$CONTAINER_NAME"
+        echo ""
+        echo "🔗 Panel Web EMQX: http://127.0.0.1:18083/"
         ;;
     logs)
         $ENGINE logs -f "$CONTAINER_NAME"
