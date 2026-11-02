@@ -98,6 +98,8 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         y: {
           min: minY,
           max: maxY,
+          suggestedMin: minY,
+          suggestedMax: maxY,
           ticks: {
             color: colors.textSecondary,
             font: { size: 11 },
