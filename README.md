@@ -83,10 +83,11 @@ El proyecto incluye un script de gestión automatizado compatible tanto con **Po
    cp secrets.example.h secrets.h
    ```
 2. Abre `Sensores.ino` en el **Arduino IDE** y verifica en `secrets.h` tus credenciales Wi-Fi y tokens.
-3. En `Sensores.ino`, confirma que la IP del broker apunte a la de tu PC:
+3. En `Sensores.ino`, confirma que la IP del broker apunte a la IP de tu PC en la red Wi-Fi:
+   *(Puedes obtener la IP de tu PC ejecutando `ip -4 route get 1.1.1.1 | awk '{print $7}'`)*
    ```cpp
    #define ENABLE_LOCAL_MQTT true
-   const char *LOCAL_MQTT_SERVER = "172.16.3.166"; // IP local de tu PC
+   const char *LOCAL_MQTT_SERVER = "192.168.1.28"; // IP local de tu PC
    const int   LOCAL_MQTT_PORT   = 1883;
    ```
 4. Selecciona tu placa (ej: `ESP32S3 Dev Module`), activa `OPI PSRAM` si aplica, compila y sube el firmware.
@@ -115,9 +116,81 @@ El script iniciará el backend en el puerto `3000` y el frontend en el puerto `4
 ### Paso 4: Abrir el Dashboard
 
 Ingresa desde tu navegador a:
-👉 **`http://localhost:4200`**
+👉 **`http://localhost:4200`** (o `http://localhost:3000` si usas el servidor compilado).
 
 *(También puedes escanear el archivo `CodigoQR.jpg` con tu teléfono para acceder rápidamente si estás en la misma red Wi-Fi).*
+
+---
+
+## 📡 Guía Paso a Paso: Uso y Publicación con EMQX (MQTT Local)
+
+### 1. Entendiendo la Arquitectura (Local vs Nube)
+* **Broker EMQX Local (`http://127.0.0.1:18083`):** Corre en tu máquina personal. Cuando publicas en este broker, los datos viajan a tu servidor local (`http://localhost:3000` / `4200`).
+* **Servidor en la Nube (`http://18.226.105.167/`):** La instancia en Lightsail recibe datos de forma directa mediante **HTTP POST (Push)** desde el ESP32; no está conectada al broker EMQX de tu PC.
+
+### 2. Pasos para Iniciar Ambos Servicios Locales
+Para que el dashboard local reciba y grafique los datos de EMQX, **ambos servicios deben estar corriendo simultáneamente**:
+
+1. **Iniciar el Broker EMQX:**
+   ```bash
+   ./emqx.sh start
+   ```
+   *(Verifica con `./emqx.sh status` que el contenedor esté corriendo).*
+2. **Iniciar el Backend y Frontend del Dashboard:**
+   ```bash
+   ./start.sh
+   ```
+   *(O solo el backend unificado: `cd dashboard && npm start`).*
+
+### 3. Pasos para Publicar Datos a EMQX
+
+#### Opción A: Desde el Panel Web de EMQX (Recomendado para pruebas rápidas)
+1. Abre en tu navegador: [http://127.0.0.1:18083](http://127.0.0.1:18083) (Usuario: `admin`, Clave: `public`).
+2. En el menú lateral izquierdo, haz clic en **Diagnóstico** -> **Cliente WebSocket**.
+3. Haz clic en el botón verde **Conectar** (establece conexión al puerto local `8083/mqtt`).
+4. En el panel inferior **Publicar**, completa los siguientes campos:
+   * **Tema (Topic):** `esp32/sensors`
+   * **QoS:** `0`
+   * **Carga útil (Payload JSON):**
+     ```json
+     {"temperatura": 26.3, "humedad": 58.0, "humedad_suelo": 50}
+     ```
+5. Presiona el botón verde **Publicar**.
+6. Abre [http://localhost:3000](http://localhost:3000) o [http://localhost:4200](http://localhost:4200) y verás la tarjeta de sensores y los gráficos actualizarse al instante.
+
+#### Opción B: Desde la Terminal (CLI rápido con Node.js)
+Desde la raíz del proyecto, ejecuta una publicación en un solo comando:
+```bash
+node -e "const mqtt = require('./dashboard/node_modules/mqtt'); const client = mqtt.connect('mqtt://localhost:1883'); client.on('connect', () => { client.publish('esp32/sensors', JSON.stringify({temperatura: 25.4, humedad: 60.1, humedad_suelo: 52}), () => { console.log('✅ Publicado en EMQX'); client.end(); }); });"
+```
+
+#### Opción C: Desde el Microcontrolador ESP32
+En `Sensores.ino`, asegura:
+1. `#define ENABLE_LOCAL_MQTT true`
+2. `LOCAL_MQTT_SERVER = "<IP_DE_TU_PC>"` (puerto `1883`).
+El ESP32 publicará automáticamente en el tema `esp32/sensors` cada `SENSOR_INTERVAL` (por defecto cada 5 segundos).
+
+---
+
+## 📥 Descarga de Historial de Sensores (.csv)
+
+El dashboard cuenta con un módulo de persistencia continua en disco y descarga filtrada:
+* **Ubicación:** En la cabecera de la sección **📊 Historial de Sensores** del dashboard web.
+* **Rangos seleccionables:**
+  * Últimos 3 meses (90 días) *(por defecto)*
+  * Último mes (30 días)
+  * Últimos 6 meses (180 días)
+  * Último año (365 días)
+* **Formato del archivo descargado:**
+  Se genera un archivo `.csv` optimizado para Excel, PowerBI o Python sin columnas innecesarias de época (`timestamp`):
+  ```csv
+  fecha,temperatura,humedad,humedad_suelo
+  2026-11-02T17:57:20.184Z,28.7,62.4,70
+  ```
+* **Endpoint REST directo:**
+  ```http
+  GET /api/history/download?months=3
+  ```
 
 ---
 

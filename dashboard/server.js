@@ -397,7 +397,7 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 const CSV_FILE = path.join(DATA_DIR, 'sensor_history.csv');
 if (!fs.existsSync(CSV_FILE)) {
-  fs.writeFileSync(CSV_FILE, 'timestamp,fecha_iso,temperatura,humedad,humedad_suelo\n', 'utf-8');
+  fs.writeFileSync(CSV_FILE, 'timestamp,fecha,temperatura,humedad,humedad_suelo\n', 'utf-8');
 }
 
 // Cargar las últimas lecturas persistidas al iniciar el servidor para no arrancar en blanco
@@ -448,7 +448,7 @@ app.get('/api/history/download', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   if (!fs.existsSync(CSV_FILE)) {
-    res.write('timestamp,fecha_iso,temperatura,humedad,humedad_suelo\n');
+    res.write('fecha,temperatura,humedad,humedad_suelo\n');
     return res.end();
   }
 
@@ -465,7 +465,8 @@ app.get('/api/history/download', (req, res) => {
     if (!trimmed) return;
 
     if (isHeader) {
-      res.write(trimmed + '\n');
+      // Entregar cabecera limpia: 'fecha' en lugar de 'fecha_iso' y sin columna 'timestamp'
+      res.write('fecha,temperatura,humedad,humedad_suelo\n');
       isHeader = false;
       return;
     }
@@ -475,7 +476,9 @@ app.get('/api/history/download', (req, res) => {
 
     const ts = parseInt(trimmed.substring(0, commaIndex), 10);
     if (!isNaN(ts) && ts >= cutoffTimestamp) {
-      res.write(trimmed + '\n');
+      // Omitir el timestamp numérico inicial y escribir fecha,temperatura,humedad,humedad_suelo
+      const recordWithoutTimestamp = trimmed.substring(commaIndex + 1);
+      res.write(recordWithoutTimestamp + '\n');
     }
   });
 
