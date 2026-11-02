@@ -347,13 +347,13 @@ bool setupCamera() {
   config.pin_sscb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn     = PWDN_GPIO_NUM;
   config.pin_reset    = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 20000000;
+  config.xclk_freq_hz = 20000000; // 20 MHz: frecuencia óptima de reloj para sensor OV2640
   config.pixel_format = PIXFORMAT_JPEG;
-  config.jpeg_quality = 16; // Optimizado: reduce ~40% el peso de la imagen sin pérdida visible, agilizando la subida
+  config.jpeg_quality = 14;       // Calidad JPEG equilibrada para OV2640 (10-63, menor = mejor calidad)
   config.grab_mode    = CAMERA_GRAB_LATEST;
 
   if (psramFound()) {
-    config.frame_size   = FRAMESIZE_VGA;  // 640x480
+    config.frame_size   = FRAMESIZE_VGA;  // 640x480 (óptimo para streaming fluido y Telegram en OV2640)
     config.fb_location  = CAMERA_FB_IN_PSRAM;
     config.fb_count     = 2;
   } else {
@@ -368,7 +368,54 @@ bool setupCamera() {
     Serial.printf("❌ Error al iniciar la cámara: 0x%x\n", err);
     return false;
   }
-  Serial.println("✅ Cámara inicializada correctamente.");
+
+  // Calibración y configuración específica del sensor OV2640 (2 MP)
+  sensor_t *s = esp_camera_sensor_get();
+  if (s != nullptr) {
+    if (s->id.PID == OV2640_PID) {
+      Serial.println("📷 Sensor OV2640 (2MP) detectado y calibrado.");
+
+      // Corrección de orientación para montaje físico
+      #if defined(CAMERA_MODEL_ESP32S3_EYE)
+        s->set_vflip(s, 1);   // Inversión vertical típica en módulo S3
+        s->set_hmirror(s, 0); // Sin espejo horizontal
+      #elif defined(CAMERA_MODEL_AI_THINKER)
+        s->set_vflip(s, 1);
+        s->set_hmirror(s, 0);
+      #else
+        s->set_vflip(s, 0);
+        s->set_hmirror(s, 0);
+      #endif
+
+      // Parámetros de imagen y balances de color automáticos
+      s->set_brightness(s, 1);                 // Rango: -2 a 2 (1 = mejora luminosidad en interiores)
+      s->set_contrast(s, 0);                   // Rango: -2 a 2
+      s->set_saturation(s, 0);                 // Rango: -2 a 2
+      s->set_whitebal(s, 1);                   // Habilitar Auto White Balance (AWB)
+      s->set_awb_gain(s, 1);                   // Ganancia de AWB
+      s->set_wb_mode(s, 0);                    // Modo de balance de blancos automático
+      s->set_exposure_ctrl(s, 1);              // Habilitar Auto Exposure Control (AEC)
+      s->set_aec2(s, 0);                       // DSP AEC desactivado para evitar parpadeos
+      s->set_gain_ctrl(s, 1);                  // Habilitar Auto Gain Control (AGC)
+      s->set_gainceiling(s, (gainceiling_t)2); // Límite de ganancia 4x para evitar ruido excesivo
+      s->set_bpc(s, 1);                        // Corrección de píxeles negros defectuosos
+      s->set_wpc(s, 1);                        // Corrección de píxeles blancos defectuosos
+      s->set_lenc(s, 1);                       // Corrección de viñeteado de lente
+    } else {
+      Serial.printf("ℹ️ Sensor detectado con PID: 0x%04X (no es OV2640)\n", s->id.PID);
+    }
+  }
+
+  // Estabilización inicial de exposición y balance (descarta fotogramas de calentamiento)
+  for (int i = 0; i < 3; i++) {
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (fb) {
+      esp_camera_fb_return(fb);
+      delay(40);
+    }
+  }
+
+  Serial.println("✅ Cámara OV2640 lista para captura y streaming.");
   return true;
 }
 
