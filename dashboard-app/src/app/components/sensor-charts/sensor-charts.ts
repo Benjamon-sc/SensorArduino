@@ -5,6 +5,7 @@ import {
   ViewChild,
   ElementRef,
   AfterViewInit,
+  ChangeDetectorRef,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { Chart, registerables } from 'chart.js';
@@ -30,16 +31,26 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   private sub!: Subscription;
   downloading = false;
 
-  constructor(private sensorService: SensorDataService) {}
+  constructor(
+    private sensorService: SensorDataService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
-  downloadHistory(monthsVal: string | number = 3, formatVal: string = 'xlsx'): void {
+  async downloadHistory(monthsVal: string | number = 3, formatVal: string = 'xlsx'): Promise<void> {
+    if (this.downloading) return;
     const months = Number(monthsVal) || 3;
     const format = formatVal === 'csv' ? 'csv' : 'xlsx';
     this.downloading = true;
-    this.sensorService.downloadHistory(months, format);
-    setTimeout(() => {
+    this.cdr.markForCheck();
+
+    try {
+      await this.sensorService.downloadHistory(months, format);
+    } catch (err) {
+      console.error('⚠️ Error en la descarga del historial:', err);
+    } finally {
       this.downloading = false;
-    }, 2000);
+      this.cdr.markForCheck();
+    }
   }
 
   ngOnInit(): void {}

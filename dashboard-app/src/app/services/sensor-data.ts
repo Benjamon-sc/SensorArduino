@@ -148,18 +148,35 @@ export class SensorDataService {
     return `${this.API_URL}/history/download?months=${months}&format=${format}${keyParam}`;
   }
 
-  downloadHistory(months: number = 3, format: string = 'xlsx'): void {
+  async downloadHistory(months: number = 3, format: string = 'xlsx'): Promise<void> {
     const url = this.getExportHistoryUrl(months, format);
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Error ${res.status}: no se pudo generar el archivo de historial`);
+    }
+
+    const disposition = res.headers.get('content-disposition');
+    let filename = `historial_sensores_${months}meses.${format}`;
+    if (disposition) {
+      const match = disposition.match(/filename="?([^"]+)"?/i);
+      if (match && match[1]) {
+        filename = match[1];
+      }
+    }
+
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.setAttribute('download', '');
+    a.href = blobUrl;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
   }
 
   // Compatibilidad hacia atrás
-  downloadHistoryCsv(months: number = 3): void {
-    this.downloadHistory(months, 'csv');
+  async downloadHistoryCsv(months: number = 3): Promise<void> {
+    await this.downloadHistory(months, 'csv');
   }
 }
