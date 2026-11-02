@@ -62,7 +62,8 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     if (val === null || val === undefined || isNaN(Number(val))) {
       return '';
     }
-    return Number(Number(val).toFixed(2)).toString();
+    const num = Number(val);
+    return Number(num.toFixed(2)).toLocaleString('es-AR', { maximumFractionDigits: 2 });
   }
 
   private commonOptions(title: string, yUnit: string, minY: number = 0, maxY: number = 100): any {
@@ -103,6 +104,7 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           ticks: {
             color: colors.textSecondary,
             font: { size: 11 },
+            precision: 2,
             callback: (v: any) => `${this.formatNumber(v)}${yUnit}`,
           },
           grid: { color: colors.grid },
