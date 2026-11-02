@@ -58,7 +58,14 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
-  private commonOptions(title: string, yUnit: string): any {
+  private formatNumber(val: any): string {
+    if (val === null || val === undefined || isNaN(Number(val))) {
+      return '';
+    }
+    return Number(Number(val).toFixed(2)).toString();
+  }
+
+  private commonOptions(title: string, yUnit: string, minY: number = 0, maxY: number = 100): any {
     const colors = this.getChartColors();
     return {
       responsive: true,
@@ -75,7 +82,7 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
         },
         tooltip: {
           callbacks: {
-            label: (ctx: any) => `${ctx.parsed.y}${yUnit}`,
+            label: (ctx: any) => `${this.formatNumber(ctx.parsed.y)}${yUnit}`,
           },
         },
       },
@@ -89,10 +96,12 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           grid: { color: colors.grid },
         },
         y: {
+          min: minY,
+          max: maxY,
           ticks: {
             color: colors.textSecondary,
             font: { size: 11 },
-            callback: (v: number) => `${v}${yUnit}`,
+            callback: (v: any) => `${this.formatNumber(v)}${yUnit}`,
           },
           grid: { color: colors.grid },
         },
@@ -117,7 +126,7 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           fill: true,
         }],
       },
-      options: this.commonOptions('🌡️ Temperatura', '°C'),
+      options: this.commonOptions('🌡️ Temperatura', '°C', 0, 100),
     });
 
     this.humChart = new Chart(this.humCanvas.nativeElement, {
@@ -132,7 +141,7 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           fill: true,
         }],
       },
-      options: this.commonOptions('💧 Humedad Ambiente', '%'),
+      options: this.commonOptions('💧 Humedad Ambiente', '%', 0, 100),
     });
 
     this.soilChart = new Chart(this.soilCanvas.nativeElement, {
@@ -147,7 +156,7 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
           fill: true,
         }],
       },
-      options: this.commonOptions('🌱 Humedad del Suelo', '%'),
+      options: this.commonOptions('🌱 Humedad del Suelo', '%', 0, 100),
     });
   }
 
@@ -158,15 +167,27 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     this.tempChart.data.labels = labels;
-    this.tempChart.data.datasets[0].data = history.map((d) => d.temperatura);
+    this.tempChart.data.datasets[0].data = history.map((d) =>
+      d.temperatura !== undefined && d.temperatura !== null
+        ? Number(Number(d.temperatura).toFixed(2))
+        : null
+    );
     this.tempChart.update('none');
 
     this.humChart.data.labels = labels;
-    this.humChart.data.datasets[0].data = history.map((d) => d.humedad);
+    this.humChart.data.datasets[0].data = history.map((d) =>
+      d.humedad !== undefined && d.humedad !== null
+        ? Number(Number(d.humedad).toFixed(2))
+        : null
+    );
     this.humChart.update('none');
 
     this.soilChart.data.labels = labels;
-    this.soilChart.data.datasets[0].data = history.map((d) => d.humedad_suelo);
+    this.soilChart.data.datasets[0].data = history.map((d) =>
+      d.humedad_suelo !== undefined && d.humedad_suelo !== null
+        ? Number(Number(d.humedad_suelo).toFixed(2))
+        : null
+    );
     this.soilChart.update('none');
   }
 }
