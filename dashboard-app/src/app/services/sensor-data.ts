@@ -142,19 +142,24 @@ export class SensorDataService {
     return `${this.API_URL}/camera/capture`;
   }
 
-  getExportHistoryUrl(months: number = 3): string {
+  getExportHistoryUrl(months: number = 3, format: string = 'xlsx'): string {
     const key = typeof localStorage !== 'undefined' ? localStorage.getItem('dashboard_api_key') : null;
     const keyParam = key ? `&key=${encodeURIComponent(key)}` : '';
-    return `${this.API_URL}/history/download?months=${months}${keyParam}`;
+    return `${this.API_URL}/history/download?months=${months}&format=${format}${keyParam}`;
   }
 
-  downloadHistoryCsv(months: number = 3): void {
-    const url = this.getExportHistoryUrl(months);
+  downloadHistory(months: number = 3, format: string = 'xlsx'): void {
+    const url = this.getExportHistoryUrl(months, format);
     const a = document.createElement('a');
     a.href = url;
     a.setAttribute('download', '');
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  // Compatibilidad hacia atrás
+  downloadHistoryCsv(months: number = 3): void {
+    this.downloadHistory(months, 'csv');
   }
 }

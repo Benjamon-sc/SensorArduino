@@ -8,9 +8,13 @@
         <option value="6">Últimos 6 meses (180 días)</option>
         <option value="12">Último año (365 días)</option>
       </select>
-      <button class="download-btn" (click)="downloadHistory(rangeSelect.value)" [disabled]="downloading">
+      <select #formatSelect class="range-select format-select" aria-label="Formato de exportación">
+        <option value="xlsx" selected>📊 Excel (.xlsx)</option>
+        <option value="csv">📄 CSV (.csv)</option>
+      </select>
+      <button class="download-btn" (click)="downloadHistory(rangeSelect.value, formatSelect.value)" [disabled]="downloading">
         <span class="btn-icon">{{ downloading ? '⏳' : '📥' }}</span>
-        <span>{{ downloading ? 'Preparando...' : 'Descargar CSV' }}</span>
+        <span>{{ downloading ? 'Generando...' : 'Descargar' }}</span>
       </button>
     </div>
   </div>

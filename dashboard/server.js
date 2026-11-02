@@ -3,6 +3,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
+const ExcelJS = require('exceljs');
 const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const cors = require('cors');
@@ -435,70 +436,158 @@ function appendToCsv(entry) {
   });
 }
 
-// Descarga en streaming de historial en CSV filtrado por tiempo (por defecto: últimos 3 meses / 90 días)
-app.get('/api/history/download', (req, res) => {
+// Formateador de fecha legible para reportes descargables: YYYY-MM-DD / HH:mm:ss
+function formatDisplayDate(ts) {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  return `${year}-${month}-${day} / ${hours}:${minutes}:${seconds}`;
+}
+
+// Descarga estilizada de historial filtrado por tiempo (soporta .xlsx con colores/fuente y .csv)
+app.get('/api/history/download', async (req, res) => {
   const months = parseFloat(req.query.months) || 3;
   const days = parseFloat(req.query.days) || (months * 30);
   const cutoffTimestamp = Date.now() - (days * 24 * 60 * 60 * 1000);
+  const isCsv = req.query.format === 'csv';
 
   const dateStr = new Date().toISOString().slice(0, 10);
-  const filename = `historial_sensores_${Math.round(days)}dias_${dateStr}.csv`;
+  const extension = isCsv ? 'csv' : 'xlsx';
+  const filename = `historial_sensores_${Math.round(days)}dias_${dateStr}.${extension}`;
 
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  if (isCsv) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-  if (!fs.existsSync(CSV_FILE)) {
-    res.write('fecha,temperatura,humedad,humedad_suelo\n');
-    return res.end();
+    if (!fs.existsSync(CSV_FILE)) {
+      res.write('Fecha,Temperatura,Humedad,Humedad Suelo\n');
+      return res.end();
+    }
+
+    const fileStream = fs.createReadStream(CSV_FILE, { encoding: 'utf-8' });
+    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+    let isHeader = true;
+    rl.on('line', (line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      if (isHeader) {
+        res.write('Fecha,Temperatura,Humedad,Humedad Suelo\n');
+        isHeader = false;
+        return;
+      }
+      const parts = trimmed.split(',');
+      const ts = parseInt(parts[0], 10);
+      if (!isNaN(ts) && ts >= cutoffTimestamp) {
+        res.write(`${formatDisplayDate(ts)},${parts[2]},${parts[3]},${parts[4]}\n`);
+      }
+    });
+
+    rl.on('close', () => res.end());
+    rl.on('error', (err) => {
+      console.error('⚠️ Error al transmitir CSV:', err.message);
+      if (!res.headersSent) res.status(500).json({ error: 'Error al generar CSV' });
+      else res.end();
+    });
+
+    req.on('close', () => { rl.close(); fileStream.destroy(); });
+    return;
   }
 
-  const fileStream = fs.createReadStream(CSV_FILE, { encoding: 'utf-8' });
-  const rl = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity,
-  });
+  // Generación en formato Excel (.xlsx) con fuente moderna, paleta de colores por columna y bordes
+  try {
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-  let isHeader = true;
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'ESP32 Sensor Dashboard';
+    workbook.created = new Date();
 
-  rl.on('line', (line) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
+    const worksheet = workbook.addWorksheet('Historial de Sensores', {
+      views: [{ showGridLines: true }],
+    });
 
-    if (isHeader) {
-      // Entregar cabecera limpia: 'fecha' en lugar de 'fecha_iso' y sin columna 'timestamp'
-      res.write('fecha,temperatura,humedad,humedad_suelo\n');
-      isHeader = false;
-      return;
+    worksheet.columns = [
+      { header: 'Fecha', key: 'fecha', width: 26 },
+      { header: 'Temperatura (°C)', key: 'temperatura', width: 20 },
+      { header: 'Humedad (%)', key: 'humedad', width: 18 },
+      { header: 'Humedad Suelo (%)', key: 'humedad_suelo', width: 24 },
+    ];
+
+    // Estilos de la cabecera: Títulos con mayúscula, fuente Segoe UI y color temático por columna
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 30;
+    // Pizarra oscuro (Fecha), Naranja térmico (Temp), Azul agua (Humedad), Verde naturaleza (Suelo)
+    const headerColors = ['334155', 'EA580C', '0284C7', '059669'];
+
+    headerRow.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Segoe UI', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + headerColors[colNumber - 1] } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      };
+    });
+
+    const bgColors = ['F8FAFC', 'FFF7ED', 'F0F9FF', 'ECFDF5'];
+    const textColors = ['1E293B', '9A3412', '075985', '065F46'];
+
+    if (fs.existsSync(CSV_FILE)) {
+      const fileStream = fs.createReadStream(CSV_FILE, { encoding: 'utf-8' });
+      const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+      let isHeader = true;
+      for await (const line of rl) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (isHeader) {
+          isHeader = false;
+          continue;
+        }
+
+        const parts = trimmed.split(',');
+        const ts = parseInt(parts[0], 10);
+        if (!isNaN(ts) && ts >= cutoffTimestamp) {
+          const row = worksheet.addRow([
+            formatDisplayDate(ts),
+            parseFloat(parts[2]),
+            parseFloat(parts[3]),
+            parseInt(parts[4], 10),
+          ]);
+          row.height = 22;
+          row.eachCell((cell, colNumber) => {
+            cell.font = { name: 'Segoe UI', size: 10.5, color: { argb: 'FF' + textColors[colNumber - 1] } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgColors[colNumber - 1] } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+          });
+        }
+      }
     }
 
-    const commaIndex = trimmed.indexOf(',');
-    if (commaIndex === -1) return;
-
-    const ts = parseInt(trimmed.substring(0, commaIndex), 10);
-    if (!isNaN(ts) && ts >= cutoffTimestamp) {
-      // Omitir el timestamp numérico inicial y escribir fecha,temperatura,humedad,humedad_suelo
-      const recordWithoutTimestamp = trimmed.substring(commaIndex + 1);
-      res.write(recordWithoutTimestamp + '\n');
-    }
-  });
-
-  rl.on('close', () => {
+    await workbook.xlsx.write(res);
     res.end();
-  });
-
-  rl.on('error', (err) => {
-    console.error('⚠️ Error al transmitir historial CSV:', err.message);
+  } catch (err) {
+    console.error('⚠️ Error al generar archivo Excel:', err.message);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Error al generar descarga de historial' });
+      res.status(500).json({ error: 'Error al generar reporte Excel' });
     } else {
       res.end();
     }
-  });
-
-  req.on('close', () => {
-    rl.close();
-    fileStream.destroy();
-  });
+  }
 });
 
 // ==========================================

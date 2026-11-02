@@ -32,10 +32,11 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(private sensorService: SensorDataService) {}
 
-  downloadHistory(monthsVal: string | number = 3): void {
+  downloadHistory(monthsVal: string | number = 3, formatVal: string = 'xlsx'): void {
     const months = Number(monthsVal) || 3;
+    const format = formatVal === 'csv' ? 'csv' : 'xlsx';
     this.downloading = true;
-    this.sensorService.downloadHistoryCsv(months);
+    this.sensorService.downloadHistory(months, format);
     setTimeout(() => {
       this.downloading = false;
     }, 2000);
