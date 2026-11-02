@@ -19,6 +19,8 @@ build/
 # Logs y volcados
 logs/
 *.log
+dashboard/data/
+*.csv
 
 # Archivos del Sistema Operativo y Editor
 .DS_Store

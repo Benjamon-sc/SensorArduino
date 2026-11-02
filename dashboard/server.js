@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const readline = require('readline');
 const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const cors = require('cors');
@@ -388,12 +389,122 @@ function broadcastWS(message) {
 }
 
 // ==========================================
+// PERSISTENCIA HISTÓRICA EN DISCO (CSV)
+// ==========================================
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+const CSV_FILE = path.join(DATA_DIR, 'sensor_history.csv');
+if (!fs.existsSync(CSV_FILE)) {
+  fs.writeFileSync(CSV_FILE, 'timestamp,fecha_iso,temperatura,humedad,humedad_suelo\n', 'utf-8');
+}
+
+// Cargar las últimas lecturas persistidas al iniciar el servidor para no arrancar en blanco
+function loadRecentHistory() {
+  try {
+    if (fs.existsSync(CSV_FILE)) {
+      const content = fs.readFileSync(CSV_FILE, 'utf-8');
+      const lines = content.trim().split('\n').slice(1); // Omitir cabecera
+      const recentLines = lines.slice(-HISTORY_MAX);
+      const parsed = recentLines.map(line => {
+        const [ts, , temp, hum, soil] = line.split(',');
+        return {
+          timestamp: parseInt(ts, 10),
+          temperatura: parseFloat(temp),
+          humedad: parseFloat(hum),
+          humedad_suelo: parseInt(soil, 10),
+        };
+      }).filter(d => !isNaN(d.timestamp));
+      if (parsed.length > 0) {
+        sensorHistory = parsed;
+        lastSensorData = parsed[parsed.length - 1];
+        console.log(`📂 Cargadas ${parsed.length} lecturas previas desde ${CSV_FILE}`);
+      }
+    }
+  } catch (err) {
+    console.error('⚠️ Error al cargar historial inicial:', err.message);
+  }
+}
+loadRecentHistory();
+
+function appendToCsv(entry) {
+  const line = `${entry.timestamp},${new Date(entry.timestamp).toISOString()},${entry.temperatura},${entry.humedad},${entry.humedad_suelo}\n`;
+  fs.appendFile(CSV_FILE, line, (err) => {
+    if (err) console.error('⚠️ Error al registrar en sensor_history.csv:', err.message);
+  });
+}
+
+// Descarga en streaming de historial en CSV filtrado por tiempo (por defecto: últimos 3 meses / 90 días)
+app.get('/api/history/download', (req, res) => {
+  const months = parseFloat(req.query.months) || 3;
+  const days = parseFloat(req.query.days) || (months * 30);
+  const cutoffTimestamp = Date.now() - (days * 24 * 60 * 60 * 1000);
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const filename = `historial_sensores_${Math.round(days)}dias_${dateStr}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  if (!fs.existsSync(CSV_FILE)) {
+    res.write('timestamp,fecha_iso,temperatura,humedad,humedad_suelo\n');
+    return res.end();
+  }
+
+  const fileStream = fs.createReadStream(CSV_FILE, { encoding: 'utf-8' });
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity,
+  });
+
+  let isHeader = true;
+
+  rl.on('line', (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+
+    if (isHeader) {
+      res.write(trimmed + '\n');
+      isHeader = false;
+      return;
+    }
+
+    const commaIndex = trimmed.indexOf(',');
+    if (commaIndex === -1) return;
+
+    const ts = parseInt(trimmed.substring(0, commaIndex), 10);
+    if (!isNaN(ts) && ts >= cutoffTimestamp) {
+      res.write(trimmed + '\n');
+    }
+  });
+
+  rl.on('close', () => {
+    res.end();
+  });
+
+  rl.on('error', (err) => {
+    console.error('⚠️ Error al transmitir historial CSV:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error al generar descarga de historial' });
+    } else {
+      res.end();
+    }
+  });
+
+  req.on('close', () => {
+    rl.close();
+    fileStream.destroy();
+  });
+});
+
+// ==========================================
 // PROCESAMIENTO DE DATOS
 // ==========================================
 function processSensorData(data) {
   const entry = {
-    temperatura: data.temperatura,
-    humedad: data.humedad,
+    temperatura: typeof data.temperatura === 'number' ? Number(data.temperatura.toFixed(2)) : data.temperatura,
+    humedad: typeof data.humedad === 'number' ? Number(data.humedad.toFixed(2)) : data.humedad,
     humedad_suelo: data.humedad_suelo,
     timestamp: Date.now(),
   };
@@ -401,8 +512,9 @@ function processSensorData(data) {
   lastSensorData = entry;
   sensorHistory.push(entry);
   touchEsp32();
+  appendToCsv(entry);
 
-  // Limitar historial
+  // Limitar historial en memoria RAM (para visualización en tiempo real)
   if (sensorHistory.length > HISTORY_MAX) {
     sensorHistory = sensorHistory.slice(-HISTORY_MAX);
   }

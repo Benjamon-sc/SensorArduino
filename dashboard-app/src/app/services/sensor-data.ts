@@ -141,4 +141,20 @@ export class SensorDataService {
   getCameraCaptureUrl(): string {
     return `${this.API_URL}/camera/capture`;
   }
+
+  getExportHistoryUrl(months: number = 3): string {
+    const key = typeof localStorage !== 'undefined' ? localStorage.getItem('dashboard_api_key') : null;
+    const keyParam = key ? `&key=${encodeURIComponent(key)}` : '';
+    return `${this.API_URL}/history/download?months=${months}${keyParam}`;
+  }
+
+  downloadHistoryCsv(months: number = 3): void {
+    const url = this.getExportHistoryUrl(months);
+    const a = document.createElement('a');
+    a.href = url;
+    a.setAttribute('download', '');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
 }

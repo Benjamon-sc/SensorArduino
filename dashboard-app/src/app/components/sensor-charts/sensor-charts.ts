@@ -28,8 +28,18 @@ export class SensorChartsComponent implements OnInit, AfterViewInit, OnDestroy {
   private humChart!: Chart;
   private soilChart!: Chart;
   private sub!: Subscription;
+  downloading = false;
 
   constructor(private sensorService: SensorDataService) {}
+
+  downloadHistory(monthsVal: string | number = 3): void {
+    const months = Number(monthsVal) || 3;
+    this.downloading = true;
+    this.sensorService.downloadHistoryCsv(months);
+    setTimeout(() => {
+      this.downloading = false;
+    }, 2000);
+  }
 
   ngOnInit(): void {}
 
