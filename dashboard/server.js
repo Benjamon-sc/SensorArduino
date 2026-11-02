@@ -3,7 +3,12 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
-const ExcelJS = require('exceljs');
+let ExcelJS = null;
+try {
+  ExcelJS = require('exceljs');
+} catch (err) {
+  console.warn('ℹ️ [Aviso] exceljs no está instalado en este entorno. Se utilizará fallback automático sin dependencias.');
+}
 const { WebSocketServer } = require('ws');
 const mqtt = require('mqtt');
 const cors = require('cors');
@@ -501,6 +506,29 @@ app.get('/api/history/download', async (req, res) => {
 
   // Generación en formato Excel (.xlsx) con fuente moderna, paleta de colores por columna y bordes
   try {
+    if (!ExcelJS) {
+      console.warn('⚠️ exceljs no disponible en el servidor: entregando fallback CSV compatible.');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="historial_sensores_${Math.round(days)}dias_${dateStr}.csv"`);
+      res.write('Fecha,Temperatura,Humedad,Humedad Suelo\n');
+      if (fs.existsSync(CSV_FILE)) {
+        const fileStream = fs.createReadStream(CSV_FILE, { encoding: 'utf-8' });
+        const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+        let isHeader = true;
+        for await (const line of rl) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (isHeader) { isHeader = false; continue; }
+          const parts = trimmed.split(',');
+          const ts = parseInt(parts[0], 10);
+          if (!isNaN(ts) && ts >= cutoffTimestamp) {
+            res.write(`${formatDisplayDate(ts)},${parts[2]},${parts[3]},${parts[4]}\n`);
+          }
+        }
+      }
+      return res.end();
+    }
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
