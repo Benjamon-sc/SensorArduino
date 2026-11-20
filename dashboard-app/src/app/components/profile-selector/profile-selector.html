@@ -3,12 +3,12 @@
     <div class="header-title">
       <span class="icon">🌿</span>
       <div>
-        <h3>Perfil de Cultivo de Alto Valor</h3>
-        <span class="subtitle">Ajuste fenológico y microclimático en tiempo real</span>
+        <h3>Perfil de Cultivo</h3>
+        <span class="subtitle">Monitoreo y microclima en tiempo real</span>
       </div>
     </div>
 
-    <!-- Selector de Especies -->
+    <!-- Pestañas de Especies y Personalizado -->
     <div class="tabs-container">
       @for (profile of profiles; track profile.id) {
         <button
@@ -29,26 +29,87 @@
     <div class="profile-body">
       <div class="species-meta">
         <div class="species-title">
-          <h4>{{ active.name }} <em>({{ active.scientificName }})</em></h4>
+          <h4>{{ active.name }} @if (active.scientificName) { <em>({{ active.scientificName }})</em> }</h4>
           <p>{{ active.description }}</p>
         </div>
 
         <div class="actions">
+          @if (active.id === 'custom') {
+            <button
+              type="button"
+              class="edit-btn"
+              (click)="toggleEditCustom()"
+            >
+              {{ isEditingCustom ? '✕ Cerrar Editor' : '✏️ Editar Mis Parámetros' }}
+            </button>
+          }
+
           <button
             type="button"
             class="sync-btn"
             [disabled]="applying"
             (click)="applyToCloud()"
           >
-            {{ applied ? '✅ Umbrales en Nube Sincronizados' : (applying ? '⏳ Sincronizando...' : '⚡ Aplicar a la Nube (AWS/Telegram)') }}
+            {{ applied ? '✅ Guardado en Nube' : (applying ? '⏳ Guardando...' : '⚡ Aplicar a la Nube (AWS)') }}
           </button>
-          @if (errorMsg) {
-            <span class="error-text">{{ errorMsg }}</span>
-          }
         </div>
       </div>
 
-      <!-- Barra de Estado Agronómico Dinámico -->
+      <!-- Alerta de Error / Explicación de API Key -->
+      @if (errorMsg) {
+        <div class="api-warning-banner">
+          <span>{{ errorMsg }}</span>
+        </div>
+      }
+
+      <!-- Editor de Perfil Personalizado -->
+      @if (active.id === 'custom' && isEditingCustom) {
+        <div class="custom-editor-panel">
+          <h5>⚙️ Configura los valores ideales para tu cultivo:</h5>
+          <div class="custom-grid">
+            <div class="input-item">
+              <label>🌡️ Temp. Máxima (°C)</label>
+              <input type="number" [(ngModel)]="customTempMax" step="1" />
+            </div>
+            <div class="input-item">
+              <label>🥶 Temp. Mínima (°C)</label>
+              <input type="number" [(ngModel)]="customTempMin" step="1" />
+            </div>
+            <div class="input-item">
+              <label>💧 Humedad Aire Máx. (%)</label>
+              <input type="number" [(ngModel)]="customHumidityMax" step="5" />
+            </div>
+            <div class="input-item">
+              <label>🏜️ Humedad Aire Mín. (%)</label>
+              <input type="number" [(ngModel)]="customHumidityMin" step="5" />
+            </div>
+            <div class="input-item">
+              <label>🌱 Humedad Suelo Mín. (%)</label>
+              <input type="number" [(ngModel)]="customSoilMin" step="5" />
+            </div>
+            <div class="input-item">
+              <label>🔬 VPD Ideal (Mín / Máx kPa)</label>
+              <div class="dual-inputs">
+                <input type="number" [(ngModel)]="customVpdMin" step="0.1" placeholder="Mín" />
+                <input type="number" [(ngModel)]="customVpdMax" step="0.1" placeholder="Máx" />
+              </div>
+            </div>
+            <div class="input-item full-width">
+              <label>🔑 Clave de API (Lightsail)</label>
+              <input type="password" [(ngModel)]="apiKey" placeholder="Tu API Key configurada en el servidor" />
+              <small>Esta clave protege tu servidor para que nadie más modifique los límites.</small>
+            </div>
+          </div>
+          <div class="custom-actions">
+            <button type="button" class="save-custom-btn" (click)="saveCustomProfile()" [disabled]="applying">
+              {{ applied ? '✅ Guardado' : '💾 Guardar y Aplicar Límites' }}
+            </button>
+            <button type="button" class="cancel-btn" (click)="toggleEditCustom()">Cancelar</button>
+          </div>
+        </div>
+      }
+
+      <!-- Barra de Estado Agronómico Amigable -->
       @if (healthStatus$ | async; as health) {
         <div class="health-banner" [ngClass]="health.status">
           <div class="health-badge">
@@ -56,11 +117,11 @@
             <strong>{{ health.label }}</strong>
           </div>
           <div class="health-vpd">
-            <strong>VPD Actual:</strong> {{ health.vpd | number:'1.2-2' }} kPa
+            <strong>VPD:</strong> {{ health.vpd | number:'1.2-2' }} kPa
             <span class="vpd-pill" [ngClass]="health.vpdStatus">({{ health.vpdLabel }})</span>
           </div>
           <div class="health-advice">
-            💡 <strong>Recomendación:</strong> {{ health.advice }}
+            💡 <strong>Consejo:</strong> {{ health.advice }}
           </div>
         </div>
       }

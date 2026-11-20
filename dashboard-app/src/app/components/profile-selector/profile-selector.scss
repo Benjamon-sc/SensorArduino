@@ -130,6 +130,24 @@
     align-items: center;
     gap: 0.75rem;
 
+    .edit-btn {
+      background: rgba(255, 255, 255, 0.85);
+      color: var(--text, #1f2937);
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: #ffffff;
+        border-color: #3b82f6;
+        color: #1d4ed8;
+      }
+    }
+
     .sync-btn {
       background: linear-gradient(135deg, #10b981, #059669);
       color: white;
@@ -156,6 +174,121 @@
     .error-text {
       color: #ef4444;
       font-size: 0.8rem;
+    }
+  }
+}
+
+.api-warning-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.custom-editor-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+
+  h5 {
+    margin: 0 0 0.85rem 0;
+    font-size: 0.95rem;
+    color: #1e3a8a;
+  }
+
+  .custom-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem 1rem;
+    margin-bottom: 1rem;
+
+    .input-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+
+      &.full-width {
+        grid-column: 1 / -1;
+      }
+
+      label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--text, #374151);
+      }
+
+      input {
+        padding: 0.45rem 0.65rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        outline: none;
+        background: #ffffff;
+
+        &:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+      }
+
+      small {
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+
+      .dual-inputs {
+        display: flex;
+        gap: 0.4rem;
+
+        input {
+          flex: 1;
+        }
+      }
+    }
+  }
+
+  .custom-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+
+    .save-custom-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 0.5rem 1.1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        background: #1d4ed8;
+      }
+    }
+
+    .cancel-btn {
+      background: transparent;
+      border: 1px solid #d1d5db;
+      color: #4b5563;
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+
+      &:hover {
+        background: #f3f4f6;
+      }
     }
   }
 }
