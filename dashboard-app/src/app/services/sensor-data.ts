@@ -119,19 +119,32 @@ export class SensorDataService {
       headers['X-API-Key'] = key;
     }
 
-    const res = await fetch(`${this.API_URL}/thresholds`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(thresholds),
-    });
+    const controller = new AbortController();
+    const timeoutTimer = setTimeout(() => controller.abort(), 8000);
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `Error ${res.status}: no se pudieron actualizar los umbrales`);
+    try {
+      const res = await fetch(`${this.API_URL}/thresholds`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(thresholds),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Error ${res.status}: no se pudieron actualizar los umbrales`);
+      }
+
+      const data = await res.json();
+      this.thresholds$.next(data);
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Tiempo de espera agotado al conectar con el servidor');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutTimer);
     }
-
-    const data = await res.json();
-    this.thresholds$.next(data);
   }
 
   getCameraStreamUrl(): string {

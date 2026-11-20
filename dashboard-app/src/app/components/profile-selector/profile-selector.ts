@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PlantProfileService } from '../../services/plant-profile.service';
@@ -13,6 +13,7 @@ import { PlantProfile } from '../../models/plant-profiles.models';
 })
 export class ProfileSelectorComponent implements OnInit {
   private plantService = inject(PlantProfileService);
+  private cdr = inject(ChangeDetectorRef);
 
   profiles: PlantProfile[] = this.plantService.getProfiles();
   activeProfile$ = this.plantService.getActiveProfile();
@@ -58,17 +59,20 @@ export class ProfileSelectorComponent implements OnInit {
     if (id !== 'custom') {
       this.isEditingCustom = false;
     }
+    this.cdr.markForCheck();
   }
 
   toggleEditCustom(): void {
     this.syncFormWithCustomProfile();
     this.isEditingCustom = !this.isEditingCustom;
+    this.cdr.markForCheck();
   }
 
   async saveCustomProfile(): Promise<void> {
     try {
       this.applying = true;
       this.errorMsg = '';
+      this.cdr.markForCheck();
 
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('dashboard_api_key', this.apiKey);
@@ -89,11 +93,17 @@ export class ProfileSelectorComponent implements OnInit {
       await this.plantService.applyProfileThresholds(this.apiKey);
       this.applied = true;
       this.isEditingCustom = false;
-      setTimeout(() => (this.applied = false), 2500);
+      this.cdr.markForCheck();
+
+      setTimeout(() => {
+        this.applied = false;
+        this.cdr.markForCheck();
+      }, 2500);
     } catch (err: any) {
       this.handleApiError(err);
     } finally {
       this.applying = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -101,13 +111,21 @@ export class ProfileSelectorComponent implements OnInit {
     try {
       this.applying = true;
       this.errorMsg = '';
+      this.cdr.markForCheck();
+
       await this.plantService.applyProfileThresholds(this.apiKey);
       this.applied = true;
-      setTimeout(() => (this.applied = false), 2500);
+      this.cdr.markForCheck();
+
+      setTimeout(() => {
+        this.applied = false;
+        this.cdr.markForCheck();
+      }, 2500);
     } catch (err: any) {
       this.handleApiError(err);
     } finally {
       this.applying = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -118,6 +136,10 @@ export class ProfileSelectorComponent implements OnInit {
     } else {
       this.errorMsg = msg || 'Error al conectar con el servidor en la nube.';
     }
-    setTimeout(() => (this.errorMsg = ''), 7000);
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      this.errorMsg = '';
+      this.cdr.markForCheck();
+    }, 7000);
   }
 }

@@ -1,4 +1,4 @@
-import { Component, Output, EventEmitter, OnInit, inject } from '@angular/core';
+import { Component, Output, EventEmitter, OnInit, inject, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { SensorDataService } from '../../services/sensor-data';
@@ -18,6 +18,7 @@ export class SettingsPanelComponent implements OnInit {
 
   private sensorService = inject(SensorDataService);
   private plantService = inject(PlantProfileService);
+  private cdr = inject(ChangeDetectorRef);
 
   profiles: PlantProfile[] = this.plantService.getProfiles();
   activeProfile$ = this.plantService.getActiveProfile();
@@ -40,26 +41,37 @@ export class SettingsPanelComponent implements OnInit {
     }
     this.sensorService.getThresholds().subscribe((t) => {
       this.thresholds = { ...t };
+      this.cdr.markForCheck();
     });
   }
 
   loadPreset(profile: PlantProfile): void {
     this.thresholds = { ...profile.thresholds };
     this.plantService.selectProfile(profile.id);
+    this.cdr.markForCheck();
   }
 
   async save(): Promise<void> {
     try {
       this.errorMessage = '';
+      this.cdr.markForCheck();
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('dashboard_api_key', this.apiKey);
       }
       await this.sensorService.updateThresholds(this.thresholds, this.apiKey);
       this.saved = true;
-      setTimeout(() => (this.saved = false), 2000);
+      this.cdr.markForCheck();
+      setTimeout(() => {
+        this.saved = false;
+        this.cdr.markForCheck();
+      }, 2000);
     } catch (err: any) {
       this.errorMessage = err.message || 'Error al guardar los umbrales';
-      setTimeout(() => (this.errorMessage = ''), 4000);
+      this.cdr.markForCheck();
+      setTimeout(() => {
+        this.errorMessage = '';
+        this.cdr.markForCheck();
+      }, 4000);
     }
   }
 
