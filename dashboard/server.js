@@ -86,14 +86,25 @@ function broadcastFrameToMjpeg(frame) {
   }
 }
 
-// Umbrales de alerta (configurables desde el frontend)
+// Umbrales de alerta (configurables desde el frontend y persistidos en disco)
+const THRESHOLDS_FILE = path.join(__dirname, 'data', 'thresholds.json');
 let alertThresholds = {
-  temp_max: 35,
-  temp_min: 5,
-  humidity_max: 90,
-  humidity_min: 20,
-  soil_min: 20,
+  temp_max: 28,
+  temp_min: 18,
+  humidity_max: 65,
+  humidity_min: 40,
+  soil_min: 35,
 };
+
+try {
+  if (fs.existsSync(THRESHOLDS_FILE)) {
+    const rawData = fs.readFileSync(THRESHOLDS_FILE, 'utf-8');
+    alertThresholds = { ...alertThresholds, ...JSON.parse(rawData) };
+    console.log('📋 Umbrales de alerta cargados desde disco:', alertThresholds);
+  }
+} catch (err) {
+  console.warn('⚠️ No se pudo leer thresholds.json, usando valores por defecto:', err.message);
+}
 
 // ==========================================
 // EXPRESS + HTTP SERVER
@@ -155,6 +166,16 @@ app.get('/api/thresholds', (req, res) => {
 
 app.post('/api/thresholds', requireApiKey, (req, res) => {
   alertThresholds = { ...alertThresholds, ...req.body };
+  try {
+    const dataDir = path.dirname(THRESHOLDS_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(THRESHOLDS_FILE, JSON.stringify(alertThresholds, null, 2), 'utf-8');
+    console.log('💾 Nuevos umbrales guardados en disco:', alertThresholds);
+  } catch (err) {
+    console.warn('⚠️ No se pudo persistir thresholds.json:', err.message);
+  }
   broadcastWS({ type: 'thresholds', data: alertThresholds });
   res.json(alertThresholds);
 });

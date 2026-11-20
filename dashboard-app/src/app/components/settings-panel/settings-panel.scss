@@ -63,6 +63,55 @@
   gap: 1.15rem;
 }
 
+.presets-box {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--border-radius, 10px);
+  padding: 0.75rem;
+
+  .presets-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text, #1f2937);
+    margin-bottom: 0.5rem;
+  }
+
+  .presets-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .preset-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.8);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text, #374151);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: #f0fdf4;
+      border-color: #10b981;
+    }
+
+    &.active {
+      background: #059669;
+      color: #ffffff;
+      border-color: #047857;
+      box-shadow: 0 1px 4px rgba(5, 150, 105, 0.3);
+    }
+  }
+}
+
 .form-group {
   display: flex;
   flex-direction: column;

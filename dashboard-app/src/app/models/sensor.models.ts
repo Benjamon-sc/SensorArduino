@@ -34,3 +34,6 @@ export interface InitData {
   alerts: AlertData[];
   esp32_online: boolean;
 }
+
+export * from './plant-profiles.models';
+

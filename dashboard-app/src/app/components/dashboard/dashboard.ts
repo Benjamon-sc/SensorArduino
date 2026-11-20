@@ -4,6 +4,7 @@ import { CameraViewComponent } from '../camera-view/camera-view';
 import { SensorChartsComponent } from '../sensor-charts/sensor-charts';
 import { AlertsPanelComponent } from '../alerts-panel/alerts-panel';
 import { SettingsPanelComponent } from '../settings-panel/settings-panel';
+import { ProfileSelectorComponent } from '../profile-selector/profile-selector';
 import { SensorDataService } from '../../services/sensor-data';
 import { AsyncPipe } from '@angular/common';
 
@@ -16,6 +17,7 @@ import { AsyncPipe } from '@angular/common';
     SensorChartsComponent,
     AlertsPanelComponent,
     SettingsPanelComponent,
+    ProfileSelectorComponent,
     AsyncPipe,
   ],
   templateUrl: './dashboard.html',

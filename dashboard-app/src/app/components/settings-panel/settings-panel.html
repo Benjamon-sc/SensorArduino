@@ -1,11 +1,28 @@
 <div class="settings-overlay" (click)="onClose()">
   <div class="settings-panel" (click)="$event.stopPropagation()">
     <div class="settings-header">
-      <h3>⚙️ Umbrales de Alerta</h3>
+      <h3>⚙️ Umbrales y Alertas en Nube</h3>
       <button class="close-btn" (click)="onClose()">✕</button>
     </div>
 
     <div class="settings-form">
+      <!-- Cargar Presets de Cultivo de Alto Valor -->
+      <div class="presets-box">
+        <label class="presets-label">🌿 Presets de Especies de Alto Valor:</label>
+        <div class="presets-row">
+          @for (p of profiles; track p.id) {
+            <button
+              type="button"
+              class="preset-btn"
+              [class.active]="(activeProfile$ | async)?.id === p.id"
+              (click)="loadPreset(p)"
+            >
+              <span>{{ p.icon }}</span> {{ p.name }}
+            </button>
+          }
+        </div>
+      </div>
+
       <div class="form-group">
         <label>🌡️ Temperatura máxima (°C)</label>
         <input type="number" [(ngModel)]="thresholds.temp_max" min="0" max="60" step="1" />
@@ -27,12 +44,12 @@
       </div>
 
       <div class="form-group">
-        <label>🌱 Humedad del suelo mínima (%)</label>
+        <label>🌱 Humedad del suelo/sustrato mínima (%)</label>
         <input type="number" [(ngModel)]="thresholds.soil_min" min="0" max="100" step="5" />
       </div>
 
       <div class="form-group">
-        <label>🔑 Clave de API (si el backend está protegido)</label>
+        <label>🔑 Clave de API (AWS Lightsail)</label>
         <input type="password" [(ngModel)]="apiKey" placeholder="Opcional en desarrollo local" />
       </div>
 
@@ -41,7 +58,7 @@
       }
 
       <button class="save-btn" (click)="save()">
-        {{ saved ? '✅ Guardado' : '💾 Guardar' }}
+        {{ saved ? '✅ Guardado en Nube' : '💾 Guardar Umbrales' }}
       </button>
     </div>
   </div>

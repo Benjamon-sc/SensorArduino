@@ -1,5 +1,6 @@
 @if (currentData$ | async; as data) {
   <div class="cards-grid">
+    <!-- 1. Temperatura -->
     <div class="sensor-card" [class]="getTempClass(data.temperatura)">
       <div class="card-icon">🌡️</div>
       <div class="card-content">
@@ -11,6 +12,7 @@
       </div>
     </div>
 
+    <!-- 2. Humedad Ambiente -->
     <div class="sensor-card" [class]="getHumidityClass(data.humedad)">
       <div class="card-icon">💧</div>
       <div class="card-content">
@@ -22,15 +24,32 @@
       </div>
     </div>
 
+    <!-- 3. Humedad Suelo -->
     <div class="sensor-card" [class]="getSoilClass(data.humedad_suelo)">
       <div class="card-icon">🌱</div>
       <div class="card-content">
-        <span class="card-label">Humedad del Suelo</span>
+        <span class="card-label">Humedad Sustrato</span>
         <span class="card-value">{{ data.humedad_suelo }}%</span>
       </div>
       <div class="card-bar">
         <div class="bar-fill" [style.width.%]="data.humedad_suelo"></div>
       </div>
+    </div>
+
+    <!-- 4. VPD (Déficit de Presión de Vapor) -->
+    @let vpd = getVPD(data.temperatura, data.humedad);
+    <div class="sensor-card" [class]="getVpdClass(vpd)">
+      <div class="card-icon">🔬</div>
+      <div class="card-content">
+        <span class="card-label">Déficit Vapor (VPD)</span>
+        <span class="card-value">{{ vpd | number:'1.2-2' }} <small>kPa</small></span>
+      </div>
+      <div class="card-bar">
+        <div class="bar-fill" [style.width.%]="(vpd / 2.5) * 100"></div>
+      </div>
+      @if (activeProfile$ | async; as profile) {
+        <span class="card-target">Meta: {{ profile.idealVpd.min }}-{{ profile.idealVpd.max }} kPa</span>
+      }
     </div>
   </div>
 
@@ -56,10 +75,17 @@
     <div class="sensor-card skeleton">
       <div class="card-icon">🌱</div>
       <div class="card-content">
-        <span class="card-label">Humedad del Suelo</span>
+        <span class="card-label">Humedad Sustrato</span>
         <span class="card-value">--%</span>
       </div>
     </div>
+    <div class="sensor-card skeleton">
+      <div class="card-icon">🔬</div>
+      <div class="card-content">
+        <span class="card-label">Déficit Vapor (VPD)</span>
+        <span class="card-value">-- kPa</span>
+      </div>
+    </div>
   </div>
-  <div class="last-update">Esperando datos del ESP32...</div>
+  <div class="last-update">Esperando telemetría del ESP32-S3...</div>
 }

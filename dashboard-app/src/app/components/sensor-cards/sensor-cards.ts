@@ -1,36 +1,53 @@
 import { Component, inject } from '@angular/core';
-import { AsyncPipe, DatePipe, DecimalPipe } from '@angular/common';
+import { AsyncPipe, DatePipe, DecimalPipe, CommonModule } from '@angular/common';
 import { SensorDataService } from '../../services/sensor-data';
+import { PlantProfileService } from '../../services/plant-profile.service';
+import { calculateVPD } from '../../models/plant-profiles.models';
 
 @Component({
   selector: 'app-sensor-cards',
   standalone: true,
-  imports: [AsyncPipe, DatePipe, DecimalPipe],
+  imports: [AsyncPipe, DatePipe, DecimalPipe, CommonModule],
   templateUrl: './sensor-cards.html',
   styleUrl: './sensor-cards.scss',
 })
 export class SensorCardsComponent {
   private sensorService = inject(SensorDataService);
-  currentData$ = this.sensorService.getCurrentData();
+  private plantService = inject(PlantProfileService);
 
-  constructor() {}
+  currentData$ = this.sensorService.getCurrentData();
+  activeProfile$ = this.plantService.getActiveProfile();
 
   getTempClass(temp: number): string {
-    if (temp > 35) return 'danger';
-    if (temp > 30) return 'warning';
-    if (temp < 10) return 'cold';
+    const profile = this.plantService.getCurrentProfileSync();
+    if (temp > profile.thresholds.temp_max) return 'danger';
+    if (temp < profile.thresholds.temp_min) return 'cold';
+    if (temp > profile.thresholds.temp_max - 2 || temp < profile.thresholds.temp_min + 2) return 'warning';
     return 'normal';
   }
 
   getHumidityClass(hum: number): string {
-    if (hum > 80) return 'warning';
-    if (hum < 30) return 'danger';
+    const profile = this.plantService.getCurrentProfileSync();
+    if (hum > profile.thresholds.humidity_max) return 'warning';
+    if (hum < profile.thresholds.humidity_min) return 'danger';
     return 'normal';
   }
 
   getSoilClass(soil: number): string {
-    if (soil < 20) return 'danger';
-    if (soil < 40) return 'warning';
+    const profile = this.plantService.getCurrentProfileSync();
+    if (soil < profile.thresholds.soil_min) return 'danger';
+    if (soil < profile.thresholds.soil_min + 15) return 'warning';
+    return 'normal';
+  }
+
+  getVPD(temp: number, hum: number): number {
+    return calculateVPD(temp, hum);
+  }
+
+  getVpdClass(vpd: number): string {
+    const profile = this.plantService.getCurrentProfileSync();
+    if (vpd < profile.idealVpd.min) return 'warning';
+    if (vpd > profile.idealVpd.max) return 'danger';
     return 'normal';
   }
 }

@@ -1,17 +1,26 @@
-import { Component, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Output, EventEmitter, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CommonModule } from '@angular/common';
 import { SensorDataService } from '../../services/sensor-data';
+import { PlantProfileService } from '../../services/plant-profile.service';
 import { AlertThresholds } from '../../models/sensor.models';
+import { PlantProfile } from '../../models/plant-profiles.models';
 
 @Component({
   selector: 'app-settings-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, CommonModule],
   templateUrl: './settings-panel.html',
   styleUrl: './settings-panel.scss',
 })
 export class SettingsPanelComponent implements OnInit {
   @Output() close = new EventEmitter<void>();
+
+  private sensorService = inject(SensorDataService);
+  private plantService = inject(PlantProfileService);
+
+  profiles: PlantProfile[] = this.plantService.getProfiles();
+  activeProfile$ = this.plantService.getActiveProfile();
 
   thresholds: AlertThresholds = {
     temp_max: 35,
@@ -25,8 +34,6 @@ export class SettingsPanelComponent implements OnInit {
   errorMessage = '';
   saved = false;
 
-  constructor(private sensorService: SensorDataService) {}
-
   ngOnInit(): void {
     if (typeof localStorage !== 'undefined') {
       this.apiKey = localStorage.getItem('dashboard_api_key') || '';
@@ -34,6 +41,11 @@ export class SettingsPanelComponent implements OnInit {
     this.sensorService.getThresholds().subscribe((t) => {
       this.thresholds = { ...t };
     });
+  }
+
+  loadPreset(profile: PlantProfile): void {
+    this.thresholds = { ...profile.thresholds };
+    this.plantService.selectProfile(profile.id);
   }
 
   async save(): Promise<void> {

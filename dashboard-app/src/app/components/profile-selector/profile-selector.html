@@ -1,0 +1,69 @@
+<div class="profile-card">
+  <div class="profile-header">
+    <div class="header-title">
+      <span class="icon">🌿</span>
+      <div>
+        <h3>Perfil de Cultivo de Alto Valor</h3>
+        <span class="subtitle">Ajuste fenológico y microclimático en tiempo real</span>
+      </div>
+    </div>
+
+    <!-- Selector de Especies -->
+    <div class="tabs-container">
+      @for (profile of profiles; track profile.id) {
+        <button
+          type="button"
+          class="tab-btn"
+          [class.active]="(activeProfile$ | async)?.id === profile.id"
+          (click)="selectProfile(profile.id)"
+        >
+          <span class="tab-icon">{{ profile.icon }}</span>
+          <span class="tab-label">{{ profile.name }}</span>
+          <span class="tab-badge">{{ profile.category }}</span>
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (activeProfile$ | async; as active) {
+    <div class="profile-body">
+      <div class="species-meta">
+        <div class="species-title">
+          <h4>{{ active.name }} <em>({{ active.scientificName }})</em></h4>
+          <p>{{ active.description }}</p>
+        </div>
+
+        <div class="actions">
+          <button
+            type="button"
+            class="sync-btn"
+            [disabled]="applying"
+            (click)="applyToCloud()"
+          >
+            {{ applied ? '✅ Umbrales en Nube Sincronizados' : (applying ? '⏳ Sincronizando...' : '⚡ Aplicar a la Nube (AWS/Telegram)') }}
+          </button>
+          @if (errorMsg) {
+            <span class="error-text">{{ errorMsg }}</span>
+          }
+        </div>
+      </div>
+
+      <!-- Barra de Estado Agronómico Dinámico -->
+      @if (healthStatus$ | async; as health) {
+        <div class="health-banner" [ngClass]="health.status">
+          <div class="health-badge">
+            <span class="pulse-dot"></span>
+            <strong>{{ health.label }}</strong>
+          </div>
+          <div class="health-vpd">
+            <strong>VPD Actual:</strong> {{ health.vpd | number:'1.2-2' }} kPa
+            <span class="vpd-pill" [ngClass]="health.vpdStatus">({{ health.vpdLabel }})</span>
+          </div>
+          <div class="health-advice">
+            💡 <strong>Recomendación:</strong> {{ health.advice }}
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
